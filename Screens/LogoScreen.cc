@@ -26,10 +26,13 @@ LogoScreen::~LogoScreen(void) {
 
 void LogoScreen::Update(VFDLib &Display) {
     char VersionString[24];
+    /* We compute the y-axis to accomodate different VFD heights on different platforms */
+    int y = VFD_HEIGHT - Display.getTextHeight(VFD_DEFAULT_FONT); 
 
-    Display.setClipArea(0, 0, 128, 64);
+    Display.setClipArea(0, 0, VFD_WIDTH, VFD_HEIGHT);
     Display.clear(VFDSHADE_BLACK);
-    Display.drawBitmap(RioPlayLogo, 0, 0, 0, 0, 128, 64, VFDSHADE_BRIGHT, 0);
+    Display.drawBitmap(RioPlayLogo, 0, 0, 0, 0, VFD_WIDTH, VFD_HEIGHT, VFDSHADE_BRIGHT, 0);
     sprintf(VersionString, "Version %s", PLAYER_VER);
-    Display.drawText(VersionString, (128 - Display.getTextWidth(VersionString, 1)) / 2, 54, 1, -1);
+    Display.drawText(VersionString, (VFD_WIDTH - Display.getTextWidth(VersionString, VFD_DEFAULT_FONT)) / 2, 
+	y, VFD_DEFAULT_FONT, -1);
 }

@@ -119,43 +119,49 @@ void MenuScreen::Reverse(void) {
 void MenuScreen::Update(VFDLib &Display) {
     int i;
 
+    /* We put the string height here since we do a lot of calculations
+     * from this unchanging value, rather than compute it every time we
+     * decide to use it.
+     */
+    int StringHeight = Display.getTextHeight(VFD_DEFAULT_FONT);
+
     /* Set clip area to the whole screen */
-    Display.setClipArea(0, 0, 128, 64);
+    Display.setClipArea(0, 0, VFD_WIDTH, VFD_HEIGHT);
     
     /* Clear screen */
     Display.clear(VFDSHADE_BLACK);
     
     /* Draw title */
-    Display.drawText(Title, (128 - Display.getTextWidth(Title, 1)) / 2,
-            1, 1, -1);
+    Display.drawText(Title, (VFD_WIDTH - Display.getTextWidth(Title, VFD_DEFAULT_FONT)) / 2,
+            1, VFD_DEFAULT_FONT, -1);
     
     /* Inverse menu title */
-    Display.invertRectangleClipped(0, 0, 128, Display.getTextHeight(1) + 1);
+    Display.invertRectangleClipped(0, 0, VFD_WIDTH, StringHeight + 1);
     
     /* Draw Border */
-    Display.drawLineHorizClipped(63, 0, 127, VFDSHADE_BRIGHT);
-    Display.drawLineVertClipped(0, 0, 63, VFDSHADE_BRIGHT);
-    Display.drawLineVertClipped(127, 0, 63, VFDSHADE_BRIGHT);
+    Display.drawLineHorizClipped(VFD_HEIGHT-1, 0, VFD_WIDTH-1, VFDSHADE_BRIGHT);
+    Display.drawLineVertClipped(0, 0, VFD_HEIGHT-1, VFDSHADE_BRIGHT);
+    Display.drawLineVertClipped(VFD_WIDTH-1, 0, VFD_HEIGHT-1, VFDSHADE_BRIGHT);
 
     /* Change clipping area */
-    Display.setClipArea(3, Display.getTextHeight(1) + 3, 125, 61);
+    Display.setClipArea(3, StringHeight + 3, VFD_WIDTH-3, VFD_HEIGHT-3);
     
     if(NumOptions > 0) {
         /* Draw menu items */
         for(i = (CurrentlySelected - (SelectedPos - 1));
                 (i < (CurrentlySelected + (4 - (SelectedPos - 1)))) &&
                 (i <= NumOptions); i++) {
-            Display.drawText(Options[i - 1], 4, Display.getTextHeight(1) + 4 + 
-                    ((Display.getTextHeight(1) + 2) *
+            Display.drawText(Options[i - 1], 4, StringHeight + 4 + 
+                    ((StringHeight + 2) *
                     (i - (CurrentlySelected - (SelectedPos - 1)))),
-                    1, -1);
+                    VFD_DEFAULT_FONT, -1);
         }
 
         /* Invert the selected menu item */
         /* (there's some ugly math here but it works...) */
-        Display.invertRectangleClipped(2, Display.getTextHeight(1) + 3 +
-                ((Display.getTextHeight(1) + 2) * (SelectedPos - 1)), 125,
-                (Display.getTextHeight(1) * 2) + 4 +
-                ((Display.getTextHeight(1) + 2) * (SelectedPos - 1)));
+        Display.invertRectangleClipped(2, StringHeight + 3 +
+		((StringHeight + 2) * (SelectedPos - 1)), VFD_WIDTH-3,
+                (StringHeight * 2) + 4 +
+                ((StringHeight + 2) * (SelectedPos - 1)));
     }
 }
