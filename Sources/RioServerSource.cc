@@ -363,19 +363,19 @@ void RioCommandHandler::Handle(const unsigned long &Keycode) {
     int Selection;
     
     if((Keycode == PANEL_MENU) || (Keycode == REMOTE_MENU)) {
-        Globals::Display.RemoveTopScreen(&Menu);
+        Globals::Display->RemoveTopScreen(&Menu);
         Globals::Remote.RemoveHandler();
         CurrentMenu = MENU_NONE;
         return;
     }
     else if((Keycode == PANEL_WHEEL_CW) || (Keycode == REMOTE_DOWN) || (Keycode == REMOTE_DOWN_REPEAT)) {
         Menu.Advance();
-        Globals::Display.Update(&Menu);
+        Globals::Display->Update(&Menu);
         return;
     }
     else if((Keycode == PANEL_WHEEL_CCW) || (Keycode == REMOTE_UP) || (Keycode == REMOTE_UP_REPEAT)) {
         Menu.Reverse();
-        Globals::Display.Update(&Menu);
+        Globals::Display->Update(&Menu);
         return;
     }
 
@@ -389,8 +389,8 @@ void RioCommandHandler::Handle(const unsigned long &Keycode) {
             Menu.AddOption("Title");
             Menu.AddOption("Playlist");
             CurrentMenu = MENU_ROOT;
-            Globals::Display.SetTopScreen(&Menu);
-            Globals::Display.Update(&Menu);
+            Globals::Display->SetTopScreen(&Menu);
+            Globals::Display->Update(&Menu);
             return;
             break;
             
@@ -398,7 +398,7 @@ void RioCommandHandler::Handle(const unsigned long &Keycode) {
             Selection = Menu.GetSelection();
             Menu.ClearOptions();
             CurrentMenu = MENU_SELECTFROMGROUP;
-            Globals::Display.ShowHourglass();
+            Globals::Display->ShowHourglass();
             switch(Selection) {
                 case 1:
                     Menu.SetTitle("Select Artist");
@@ -431,12 +431,12 @@ void RioCommandHandler::Handle(const unsigned long &Keycode) {
                     iter++) {
                 Menu.AddOption((*iter).c_str());
             }
-            Globals::Display.Update(&Menu);
+            Globals::Display->Update(&Menu);
             return;
             break;
             
         case MENU_SELECTFROMGROUP:
-            Globals::Display.ShowHourglass();
+            Globals::Display->ShowHourglass();
             
             /* Clear the playlist if the user used the "Play" button
                (leave the playlist intact if "Enter" was used) */
@@ -457,8 +457,8 @@ void RioCommandHandler::Handle(const unsigned long &Keycode) {
                 Globals::Playlist.Enqueue(Rio, (*IDiter).ID, (*IDiter).Str);
             }
             CurrentMenu = MENU_NONE;
-            Globals::Display.RemoveTopScreen(&Menu);
-            Globals::Display.ShowHourglass();
+            Globals::Display->RemoveTopScreen(&Menu);
+            Globals::Display->ShowHourglass();
             Globals::Remote.RemoveHandler();
             Globals::Playlist.Play();
             return;
@@ -482,8 +482,8 @@ void RioCommandHandler::Handle(const unsigned long &Keycode) {
                 Globals::Playlist.Enqueue(Rio, (*IDiter).ID, (*IDiter).Str);
             }
             CurrentMenu = MENU_NONE;
-            Globals::Display.RemoveTopScreen(&Menu);
-            Globals::Display.ShowHourglass();
+            Globals::Display->RemoveTopScreen(&Menu);
+            Globals::Display->ShowHourglass();
             Globals::Remote.RemoveHandler();
             Globals::Playlist.Play();
             return;
@@ -512,8 +512,8 @@ void RioServerSource::Play(unsigned int ID) {
     Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
             "Playing Title: %s Artist: %s Album: %s",
             TrackTag.Title, TrackTag.Artist, TrackTag.Album);
-    Globals::Status.SetAttribs(TrackTag);
-    Globals::Display.Update(&Globals::Status);
+    Globals::Status->SetAttribs(TrackTag);
+    Globals::Display->Update(Globals::Status);
     
     /* Determine audio encoding type and create an instance of the 
        appropriate decoder */
@@ -533,7 +533,7 @@ void RioServerSource::Play(unsigned int ID) {
     }
     else {
         Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
-                "%s: Unknown codec", Filename);
+                "%s: Unknown codec = %s", Filename, TrackTag.Codec);
         return;
     }
     

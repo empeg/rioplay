@@ -174,7 +174,7 @@ ShoutcastCommandHandler::~ShoutcastCommandHandler(void) {
 
 void ShoutcastCommandHandler::Handle(const unsigned long &Keycode) {
     if((Keycode == PANEL_MENU) || (Keycode == REMOTE_MENU)) {
-        Globals::Display.RemoveTopScreen(&Menu);
+        Globals::Display->RemoveTopScreen(&Menu);
         Globals::Remote.RemoveHandler();
         CurrentMenu = MENU_NONE;
         return;
@@ -182,13 +182,13 @@ void ShoutcastCommandHandler::Handle(const unsigned long &Keycode) {
     else if((Keycode == PANEL_WHEEL_CW) || (Keycode == REMOTE_DOWN) ||
         (Keycode == REMOTE_DOWN_REPEAT)) {
         Menu.Advance();
-        Globals::Display.Update(&Menu);
+        Globals::Display->Update(&Menu);
         return;
     }
     else if((Keycode == PANEL_WHEEL_CCW) || (Keycode == REMOTE_UP) ||
         (Keycode == REMOTE_UP_REPEAT)) {
         Menu.Reverse();
-        Globals::Display.Update(&Menu);
+        Globals::Display->Update(&Menu);
         return;
     }
 
@@ -200,8 +200,8 @@ void ShoutcastCommandHandler::Handle(const unsigned long &Keycode) {
                 Menu.AddOption(Shoutcast->StreamNames[i]);
             }
             CurrentMenu = MENU_STREAM;
-            Globals::Display.SetTopScreen(&Menu);
-            Globals::Display.Update(&Menu);
+            Globals::Display->SetTopScreen(&Menu);
+            Globals::Display->Update(&Menu);
             return;
             break;
             
@@ -218,7 +218,7 @@ void ShoutcastCommandHandler::Handle(const unsigned long &Keycode) {
             Globals::Playlist.Enqueue(Shoutcast, Menu.GetSelection(), 
                     string(Shoutcast->StreamNames[Menu.GetSelection() - 1]));
             Globals::Playlist.Play();
-            Globals::Display.RemoveTopScreen(&Menu);
+            Globals::Display->RemoveTopScreen(&Menu);
             Globals::Remote.RemoveHandler();
             return;
             break;
@@ -232,8 +232,8 @@ void ShoutcastSource::Play(unsigned int ID) {
     /* Set title on status screen */
     Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
             "Playing Streaming Station: %s", StreamTitle);
-    Globals::Status.SetAttribs(GetTag(0));
-    Globals::Display.Update(&Globals::Status);
+    Globals::Status->SetAttribs(GetTag(0));
+    Globals::Display->Update(Globals::Status);
     
     ServerConn = OpenFile(StreamUrls[ID - 1][UrlPosition - 1]);
     
