@@ -133,13 +133,13 @@ public:
 
 private:    
     void DoResults(char *Field, const char *Query);
-    void DoPlaylists(void);
-    void DoPlaylistContents(int ID);
+    void DoPlaylists(int ID, bool tunesonly);
+    int PlaylistSelect(int ID);
     int LocateFID(int FID);
     void PrintVector(ostream& os, const vector<ListElem>& vectarray);
     int FIDtoIndex(const vector<ListElem>& vectarray, const int FID, const bool isLongFid);
     int FIDisPList(const int FID, const bool isLongFid) { return (FIDtoIndex(PLists, FID, isLongFid)); }
-    int GetPListContents(int index, bool recurse, list<StringID>& plist);
+    int GetPListContents(int index, bool recurse, bool tunesonly, list<StringID>& plist);
     char SearchField[8];
     list<StringID> SongList;
     vector<string> List;
