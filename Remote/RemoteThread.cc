@@ -22,6 +22,7 @@
 #include "KeyCodes.h"
 #include "RioServerSource.hh"
 #include "ShoutcastSource.hh"
+#include "EmpegSource.hh"
 #include "MenuScreen.hh"
 #include "Player.h"
 #include "Log.hh"
@@ -59,12 +60,13 @@ void *RemoteThread::ThreadMain(void *arg) {
         KeyCode = GetKeycode();
         
         if(KeyCode == 0) {
+	  if (Globals::hw_type != HWTYP_EMPEG) /* Hijack backlight no worky */
             /* Turn off backlight due to timeout */
-            Globals::Display.Backlight(DISPLAY_BACKLIGHT_OFF);
+            Globals::Display->Backlight(DISPLAY_BACKLIGHT_OFF);
         }
         else {
             /* Turn on backlight due to keypress */
-            Globals::Display.Backlight(DISPLAY_BACKLIGHT_ON);
+            Globals::Display->Backlight(DISPLAY_BACKLIGHT_ON);
         
             switch(KeyCode) {
                 case PANEL_POWER_UP:
@@ -79,7 +81,7 @@ void *RemoteThread::ThreadMain(void *arg) {
                         Globals::Playlist.Stop(true);
                         
                         /* Turn off LCD */
-                        Globals::Display.OnOff(0);
+                        Globals::Display->OnOff(0);
                         
                         fflush(stdout);
                         pthread_exit((void *) 1);
@@ -94,7 +96,7 @@ void *RemoteThread::ThreadMain(void *arg) {
                         Globals::Playlist.Stop(true);
                         
                         /* Turn off LCD */
-                        Globals::Display.OnOff(0);
+                        Globals::Display->OnOff(0);
                         
                         fflush(stdout);
                         pthread_exit((void *) 0);
@@ -105,7 +107,7 @@ void *RemoteThread::ThreadMain(void *arg) {
                     Globals::Playlist.Stop();
 
                     /* Turn off LCD */
-                    Globals::Display.OnOff(0);
+                    Globals::Display->OnOff(0);
 
                     /* Log the power off event */
                     Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
@@ -117,7 +119,7 @@ void *RemoteThread::ThreadMain(void *arg) {
                     timer = time(NULL);
 
                     /* Turn on LCD */
-                    Globals::Display.OnOff(1);
+                    Globals::Display->OnOff(1);
                     break;
 
                 case PANEL_POWER_DOWN:
@@ -172,7 +174,7 @@ void *RemoteThread::ThreadMain(void *arg) {
                 case PANEL_RANDOM:
                     /* Randomize playlist */
                     Globals::Playlist.SetRandom();
-                    Globals::Display.Update(&Globals::Status);
+                    Globals::Display->Update(Globals::Status);
                     break;
                     
                 case REMOTE_LIST:
@@ -283,15 +285,15 @@ void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
             //ActiveMenu.AddOption("Change Display");
 
             /* Make the menu the active screen */
-            Globals::Display.SetTopScreen(&ActiveMenu);
-            Globals::Display.Update(&ActiveMenu);
+            Globals::Display->SetTopScreen(&ActiveMenu);
+            Globals::Display->Update(&ActiveMenu);
 
             /* Update current menu */
             CurrentMenu = MENU_AUDIORECEIVER;
         }
         else {
             /* Menu pressed while a menu was displayed - exit menu system */
-            Globals::Display.RemoveTopScreen(&ActiveMenu);
+            Globals::Display->RemoveTopScreen(&ActiveMenu);
             CurrentMenu = MENU_NONE;
         }
         return;
@@ -302,7 +304,7 @@ void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
         }
         else {
             ActiveMenu.Advance();
-            Globals::Display.Update(&ActiveMenu);
+            Globals::Display->Update(&ActiveMenu);
         }
         return;
     }
@@ -312,18 +314,18 @@ void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
         }
         else {
             ActiveMenu.Advance();
-            Globals::Display.Update(&ActiveMenu);
+            Globals::Display->Update(&ActiveMenu);
         }
         return;
     }
     else if((KeyCode == REMOTE_DOWN) || (KeyCode == REMOTE_DOWN_REPEAT)) {
         ActiveMenu.Advance();
-        Globals::Display.Update(&ActiveMenu);
+        Globals::Display->Update(&ActiveMenu);
         return;
     }
     else if((KeyCode == REMOTE_UP) || (KeyCode == REMOTE_UP_REPEAT)) {
         ActiveMenu.Reverse();
-        Globals::Display.Update(&ActiveMenu);
+        Globals::Display->Update(&ActiveMenu);
         return;
     }
 
@@ -335,13 +337,15 @@ void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
                     ActiveMenu.SetTitle("Select Music Source");
                     ActiveMenu.AddOption("Rio Server");
                     ActiveMenu.AddOption("Shoutcast");
+		    if (Globals::hw_type == HWTYP_EMPEG)
+                        ActiveMenu.AddOption("Empeg");
                     CurrentMenu = MENU_MUSICSOURCE;
-                    Globals::Display.Update(&ActiveMenu);
+                    Globals::Display->Update(&ActiveMenu);
                     break;
                     
                 case 2: /* Clear Active Playlist */
                     Globals::Playlist.Clear();
-                    Globals::Display.RemoveTopScreen(&ActiveMenu);
+                    Globals::Display->RemoveTopScreen(&ActiveMenu);
                     CurrentMenu = MENU_NONE;
                     break;
                     
@@ -353,7 +357,7 @@ void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
                     ActiveMenu.AddOption("written by");
                     ActiveMenu.AddOption("David Flowerday");
                     CurrentMenu = MENU_ABOUT;
-                    Globals::Display.Update(&ActiveMenu);
+                    Globals::Display->Update(&ActiveMenu);
                     break;
                     
                 default:
@@ -374,6 +378,14 @@ void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
                     CurrentMenu = MENU_NONE;
                     break;
                     
+                case 3: /* Empeg selected */
+		    if (Globals::hw_type == HWTYP_EMPEG)
+		    {
+			Globals::Remote.InstallHandler(Globals::Empeg->GetHandler());
+                        CurrentMenu = MENU_NONE;
+		    }
+                    break;
+                    
                 default:
                     /* Unimplemented menu */
                     break;
@@ -381,7 +393,7 @@ void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
             break;
             
         case MENU_ABOUT:
-            Globals::Display.RemoveTopScreen(&ActiveMenu);
+            Globals::Display->RemoveTopScreen(&ActiveMenu);
             CurrentMenu = MENU_NONE;
             break;
     }
