@@ -2,8 +2,8 @@ LIBMAD  = libmad/libmad.a
 LIBFLAC = libflac/libFLAC.a
 LIBVORBISIDEC = libvorbisidec/libvorbisidec.a
 
-Decoders.o: Decoder.o Mp3Decoder.o FlacDecoder.o VorbisDecoder.o
-	$(LD) -r -o Decoders.o Decoder.o Mp3Decoder.o FlacDecoder.o VorbisDecoder.o \
+Decoders.o: Decoder.o Mp3Decoder.o FlacDecoder.o VorbisDecoder.o LLMadDecoder.o
+	$(LD) -r -o Decoders.o Decoder.o Mp3Decoder.o FlacDecoder.o VorbisDecoder.o LLMadDecoder.o \
         $(LIBMAD) $(LIBFLAC) $(LIBVORBISIDEC)
 
 Decoder.o: Decoder.cc Decoder.hh
@@ -11,6 +11,9 @@ Decoder.o: Decoder.cc Decoder.hh
 
 Mp3Decoder.o: Mp3Decoder.cc Mp3Decoder.hh
 	$(C++) -c -o Mp3Decoder.o $(CFLAGS) Mp3Decoder.cc $(INCLUDEDIRS)
+
+LLMadDecoder.o: LLMadDecoder.cc LLMadDecoder.hh
+	$(C++) -c -o LLMadDecoder.o $(CFLAGS) LLMadDecoder.cc $(INCLUDEDIRS)
 
 FlacDecoder.o: FlacDecoder.cc FlacDecoder.hh
 	$(C++) -c -o FlacDecoder.o $(CFLAGS) FlacDecoder.cc $(INCLUDEDIRS)
