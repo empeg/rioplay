@@ -76,6 +76,10 @@ int MenuScreen::GetSelection(void) {
     return CurrentlySelected;
 }
 
+void MenuScreen::SetSelection(int inSelected) {
+    CurrentlySelected = inSelected;
+}
+
 void MenuScreen::Advance(void) {
     CurrentlySelected++;
     SelectedPos++;
@@ -112,37 +116,46 @@ void MenuScreen::Reverse(void) {
     }
 }
 
-void MenuScreen::Update(char *Display) {
+void MenuScreen::Update(VFDLib &Display) {
     int i;
 
+    /* Set clip area to the whole screen */
+    Display.setClipArea(0, 0, 128, 64);
+    
     /* Clear screen */
-    bzero(Display, 4096);
+    Display.clear(VFDSHADE_BLACK);
     
     /* Draw title */
-    MenuFont.DrawStringCentered(Display, Title, 1);
+    Display.drawText(Title, (128 - Display.getTextWidth(Title, 1)) / 2,
+            1, 1, -1);
     
     /* Inverse menu title */
-    Inverse(Display, 0, 0, 127, MenuFont.GetHeight() + 1);
+    Display.invertRectangleClipped(0, 0, 128, Display.getTextHeight(1) + 1);
     
     /* Draw Border */
-    DrawHorizontalLine(Display, 0, 63, 128);
-    DrawVerticalLine(Display, 0, 0, 64);
-    DrawVerticalLine(Display, 127, 0, 64);
+    Display.drawLineHorizClipped(63, 0, 127, VFDSHADE_BRIGHT);
+    Display.drawLineVertClipped(0, 0, 63, VFDSHADE_BRIGHT);
+    Display.drawLineVertClipped(127, 0, 63, VFDSHADE_BRIGHT);
 
-    /* Draw menu items */
-/*    for(i = CurrentlySelected; (i < (CurrentlySelected + 4)) && (i <= NumOptions); i++) {
-        MenuFont.DrawString(Display, Options[i - 1], 4,
-                MenuFont.GetHeight() + 4 + ((MenuFont.GetHeight() + 2) * (i - CurrentlySelected)));
-    }*/
-    for(i = (CurrentlySelected - (SelectedPos - 1)); (i < (CurrentlySelected + (4 - (SelectedPos - 1)))) && (i <= NumOptions); i++) {
-        MenuFont.DrawString(Display, Options[i - 1], 4,
-                MenuFont.GetHeight() + 4 + ((MenuFont.GetHeight() + 2) * (i - (CurrentlySelected - (SelectedPos - 1)))));
-    }
+    /* Change clipping area */
+    Display.setClipArea(3, Display.getTextHeight(1) + 3, 125, 61);
     
-    /* Invert the selected menu item */
-    /* (there's some ugly math here but it works...) */
-    Inverse(Display, 2, MenuFont.GetHeight() + 3 +
-            ((MenuFont.GetHeight() + 2) * (SelectedPos - 1)), 125,
-            (MenuFont.GetHeight() * 2) + 3 + ((MenuFont.GetHeight() + 2) *
-            (SelectedPos - 1)));
+    if(NumOptions > 0) {
+        /* Draw menu items */
+        for(i = (CurrentlySelected - (SelectedPos - 1));
+                (i < (CurrentlySelected + (4 - (SelectedPos - 1)))) &&
+                (i <= NumOptions); i++) {
+            Display.drawText(Options[i - 1], 4, Display.getTextHeight(1) + 4 + 
+                    ((Display.getTextHeight(1) + 2) *
+                    (i - (CurrentlySelected - (SelectedPos - 1)))),
+                    1, -1);
+        }
+
+        /* Invert the selected menu item */
+        /* (there's some ugly math here but it works...) */
+        Display.invertRectangleClipped(2, Display.getTextHeight(1) + 3 +
+                ((Display.getTextHeight(1) + 2) * (SelectedPos - 1)), 125,
+                (Display.getTextHeight(1) * 2) + 4 +
+                ((Display.getTextHeight(1) + 2) * (SelectedPos - 1)));
+    }
 }

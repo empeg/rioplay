@@ -32,6 +32,7 @@ StatusScreen Globals::Status;
 PlaylistClass Globals::Playlist;
 RioServerSource Globals::RioServer;
 ShoutcastSource Globals::Shoutcast;
+AudioOutputDevice Globals::AudioOut;
 Log DummyLog;
 
 int main() {

@@ -234,6 +234,7 @@ enum mad_flow Mp3Decoder::OutputCallback(void *ptr,
     if(Stop == true) {
         pthread_mutex_unlock(&ClassMutex);
         Reason = REASON_STOP_REQUESTED;
+        AudioOut->Flush();
         return MAD_FLOW_STOP;
     }
     pthread_mutex_unlock(&ClassMutex);

@@ -15,8 +15,27 @@
 
 #include "Thread.hh"
 #include "MenuScreen.hh"
+#include "CommandHandler.hh"
 
 class InputSource;
+
+class RemoteCommandHandler : public CommandHandler {
+public:
+    RemoteCommandHandler(void);
+    virtual ~RemoteCommandHandler(void);
+    void Handle(const unsigned long &Keycode);
+
+private:
+    MenuScreen ActiveMenu;
+    enum MenuTypes {
+        MENU_NONE = 0,
+        MENU_AUDIORECEIVER,
+        MENU_MUSICSOURCE,
+        MENU_ABOUT
+    };
+        
+    int CurrentMenu;
+};
 
 class RemoteThread : public Thread {
 public:
@@ -24,17 +43,18 @@ public:
     ~RemoteThread(void);
     virtual void *ThreadMain(void *arg);
     InputSource *GetInputSource(void);
+    void InstallHandler(CommandHandler *inCustomHandler);
+    void RemoveHandler(void);
     
 private:
-    void SetVolume();
     unsigned long GetKeycode(void);
     void MenuHandleKeypress(unsigned long KeyCode);
     InputSource *PList, *TempPList;
     int IrFD;
-    int MixerFD;
-    int Volume;
     MenuScreen ActiveMenu;
     int InputSourceMenuActive;
+    RemoteCommandHandler Handler;
+    CommandHandler *CustomHandler;
 };
 
 #endif /* #ifndef REMOTETHREAD_HH */

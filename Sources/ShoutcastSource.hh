@@ -15,17 +15,40 @@
 
 #include "InputSource.hh"
 #include "Tag.h"
+#include "CommandHandler.hh"
+#include "MenuScreen.hh"
 
-class MenuScreen;
+class CommandHandler;
+class ShoutcastSource;
+
+class ShoutcastCommandHandler : public CommandHandler {
+public:
+    ShoutcastCommandHandler(ShoutcastSource *inShoutcast);
+    ~ShoutcastCommandHandler(void);
+    void Handle(const unsigned long &Keycode);
+
+private:
+    MenuScreen Menu;
+    enum MenuTypes {
+        MENU_NONE = 0,
+        MENU_STREAM,
+        MENU_SELECTFROMGROUP,
+        MENU_PLAYLIST
+    };
+        
+    int CurrentMenu;
+    ShoutcastSource *Shoutcast;
+};
 
 class ShoutcastSource : public InputSource {
+friend ShoutcastCommandHandler;
 public:
     ShoutcastSource(void);
     ~ShoutcastSource(void);
     Tag GetTag(int EntryNumber);
     Tag SetMetadata(char *Metadata, int MetadataLength);
-    int CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu);
     void Play(unsigned int ID);
+    CommandHandler *GetHandler(void);
 
 private:
     char StreamTitle[256];
@@ -33,6 +56,7 @@ private:
     char ***StreamUrls;
     int *NumUrls;
     int UrlPosition;
+    ShoutcastCommandHandler *Handler;
 };
 
 #endif /* #ifndef SHOUTCASTSOURCE_HH */

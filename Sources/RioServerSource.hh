@@ -18,8 +18,11 @@
 #include <string>
 #include "InputSource.hh"
 #include "Tag.h"
+#include "CommandHandler.hh"
+#include "MenuScreen.hh"
 
-class MenuScreen;
+class CommandHandler;
+class RioServerSource;
 
 class StringID {
 public:
@@ -31,14 +34,34 @@ public:
     int ID;
 };
 
+class RioCommandHandler : public CommandHandler {
+public:
+    RioCommandHandler(RioServerSource *inRio);
+    ~RioCommandHandler(void);
+    void Handle(const unsigned long &Keycode);
+
+private:
+    MenuScreen Menu;
+    enum MenuTypes {
+        MENU_NONE = 0,
+        MENU_ROOT,
+        MENU_SELECTFROMGROUP,
+        MENU_PLAYLIST
+    };
+        
+    int CurrentMenu;
+    RioServerSource *Rio;
+};
+
 class RioServerSource : public InputSource {
+friend RioCommandHandler;
 public:
     RioServerSource(void);
     ~RioServerSource(void);
-    virtual void Play(unsigned int ID);
-    virtual Tag GetTag(int ID);
+    void Play(unsigned int ID);
+    Tag GetTag(int ID);
     void DoQuery(char *Field, char *Query);
-    int CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu);
+    CommandHandler *GetHandler(void);
 
 private:    
     void DoResults(char *Field, const char *Query);
@@ -50,6 +73,7 @@ private:
     char SearchField[8];
     list<StringID> SongList;
     vector<string> List;
+    RioCommandHandler *Handler;
 };
 
 #endif /* #ifndef RIOSERVERSOURCE_H */

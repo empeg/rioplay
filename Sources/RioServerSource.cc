@@ -27,10 +27,10 @@
 #include "Globals.hh"
 #include "Mp3Decoder.hh"
 #include "FlacDecoder.hh"
+#include "CommandHandler.hh"
 #include "MemAlloc.hh"
 
 extern int errno;
-extern AudioOutputDevice PlaylistAudioOut;
 
 StringID::StringID(void) {
 }
@@ -55,6 +55,7 @@ RioServerSource::RioServerSource(void) {
     char TempString[256];
     FILE *fp;
     char *HttpLoc, *ColonLoc, *SlashLoc;
+    Handler = new RioCommandHandler(this);
     
     /* Time to find the server... */
     if((SSDP = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -106,6 +107,7 @@ RioServerSource::RioServerSource(void) {
 }
 
 RioServerSource::~RioServerSource(void) {
+    delete Handler;
 }
 
 void RioServerSource::DoQuery(char *Field, char *Query) {
@@ -348,112 +350,132 @@ Tag RioServerSource::GetTag(int ID) {
     return ReturnVal;
 }
 
-int RioServerSource::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) {
-    static int CurrentMenu = 0;
+RioCommandHandler::RioCommandHandler(RioServerSource *inRio) {
+    Rio = inRio;
+}
+
+RioCommandHandler::~RioCommandHandler(void) {
+}
+
+void RioCommandHandler::Handle(const unsigned long &Keycode) {
     list<StringID>::iterator IDiter;
     int Selection;
     
     if((Keycode == PANEL_MENU) || (Keycode == REMOTE_MENU)) {
-        Globals::Display.RemoveTopScreen(ActiveMenu);
-        CurrentMenu = 0;
-        return 0;
+        Globals::Display.RemoveTopScreen(&Menu);
+        Globals::Remote.RemoveHandler();
+        CurrentMenu = MENU_NONE;
+        return;
     }
     else if((Keycode == PANEL_WHEEL_CW) || (Keycode == REMOTE_DOWN) || (Keycode == REMOTE_DOWN_REPEAT)) {
-        ActiveMenu->Advance();
-        Globals::Display.Update(ActiveMenu);
-        return 1;
+        Menu.Advance();
+        Globals::Display.Update(&Menu);
+        return;
     }
     else if((Keycode == PANEL_WHEEL_CCW) || (Keycode == REMOTE_UP) || (Keycode == REMOTE_UP_REPEAT)) {
-        ActiveMenu->Reverse();
-        Globals::Display.Update(ActiveMenu);
-        return 1;
+        Menu.Reverse();
+        Globals::Display.Update(&Menu);
+        return;
     }
 
     switch(CurrentMenu) {
-        case 0: /* Rio Server Playlist root menu */
-            ActiveMenu->ClearOptions();
-            ActiveMenu->SetTitle("Select Music");
-            ActiveMenu->AddOption("Artist");
-            ActiveMenu->AddOption("Album");
-            ActiveMenu->AddOption("Genre");
-            ActiveMenu->AddOption("Title");
-            ActiveMenu->AddOption("Playlist");
-            CurrentMenu = 1;
-            Globals::Display.Update(ActiveMenu);
-            return 1;
+        case MENU_NONE: /* No Rio menu displayed yet */
+            Menu.ClearOptions();
+            Menu.SetTitle("Select Music");
+            Menu.AddOption("Artist");
+            Menu.AddOption("Album");
+            Menu.AddOption("Genre");
+            Menu.AddOption("Title");
+            Menu.AddOption("Playlist");
+            CurrentMenu = MENU_ROOT;
+            Globals::Display.SetTopScreen(&Menu);
+            Globals::Display.Update(&Menu);
+            return;
             break;
             
-        case 1:
-            Selection = ActiveMenu->GetSelection();
-            ActiveMenu->ClearOptions();
-            ActiveMenu->SetTitle("Select Artist");
-            CurrentMenu = 2;
+        case MENU_ROOT:
+            Selection = Menu.GetSelection();
+            Menu.ClearOptions();
+            CurrentMenu = MENU_SELECTFROMGROUP;
             Globals::Display.ShowHourglass();
             switch(Selection) {
                 case 1:
-                    ActiveMenu->AddOption("Play All");
-                    DoQuery("artist", "");
+                    Menu.SetTitle("Select Artist");
+                    Menu.AddOption("Play All");
+                    Rio->DoQuery("artist", "");
                     break;
                 case 2:
-                    ActiveMenu->AddOption("Play All");
-                    DoQuery("source", "");
+                    Menu.SetTitle("Select Album");
+                    Menu.AddOption("Play All");
+                    Rio->DoQuery("source", "");
                     break;
                 case 3:
-                    ActiveMenu->AddOption("Play All");
-                    DoQuery("genre", "");
+                    Menu.SetTitle("Select Genre");
+                    Menu.AddOption("Play All");
+                    Rio->DoQuery("genre", "");
                     break;
                 case 4:
-                    ActiveMenu->AddOption("Play All");
-                    DoQuery("title", "");
+                    Menu.SetTitle("Select Title");
+                    Menu.AddOption("Play All");
+                    Rio->DoQuery("title", "");
                     break;
                 case 5:
-                    DoPlaylists();
-                    CurrentMenu = 3;
+                    Menu.SetTitle("Select Playlist");
+                    Rio->DoPlaylists();
+                    CurrentMenu = MENU_PLAYLIST;
                     break;
             }
-            for(vector<string>::iterator iter = List.begin(); iter != List.end();
+            for(vector<string>::iterator iter = Rio->List.begin();
+                    iter != Rio->List.end();
                     iter++) {
-                ActiveMenu->AddOption((*iter).c_str());
+                Menu.AddOption((*iter).c_str());
             }
-            Globals::Display.Update(ActiveMenu);
-            return 1;
+            Globals::Display.Update(&Menu);
+            return;
             break;
             
-        case 2:
+        case MENU_SELECTFROMGROUP:
             Globals::Display.ShowHourglass();
-            Selection = ActiveMenu->GetSelection();
+            Selection = Menu.GetSelection();
             if(Selection > 1) {
-                HttpConnection::UrlEncode(List[Selection - 2]);
-                DoResults(SearchField, List[Selection - 2].c_str());
+                HttpConnection::UrlEncode(Rio->List[Selection - 2]);
+                Rio->DoResults(Rio->SearchField, Rio->List[Selection - 2].c_str());
             }
             else {
-                DoResults(SearchField, "");
+                Rio->DoResults(Rio->SearchField, "");
             }
-            CurrentMenu = 0;
-            for(IDiter = SongList.begin();
-                    IDiter != SongList.end(); IDiter++) {
-                Globals::Playlist.Enqueue(this, (*IDiter).ID);
+            for(IDiter = Rio->SongList.begin();
+                    IDiter != Rio->SongList.end(); IDiter++) {
+                Globals::Playlist.Enqueue(Rio, (*IDiter).ID, (*IDiter).Str);
             }
-            Globals::Display.RemoveTopScreen(ActiveMenu);
-            return 2;
+            CurrentMenu = MENU_NONE;
+            Globals::Display.RemoveTopScreen(&Menu);
+            Globals::Display.ShowHourglass();
+            Globals::Remote.RemoveHandler();
+            Globals::Playlist.Play();
+            return;
             break;
             
-        case 3:
-            IDiter = SongList.begin();
+        case MENU_PLAYLIST:
+            IDiter = Rio->SongList.begin();
             /* Seems like there should be a better way to do this */
-            for(int i = 0; i < (ActiveMenu->GetSelection() - 1); i++) {
+            for(int i = 0; i < (Menu.GetSelection() - 1); i++) {
                 IDiter++;
             }
-            DoPlaylistContents((*IDiter).ID);
-            for(IDiter = SongList.begin(); IDiter != SongList.end(); IDiter++) {
-                Globals::Playlist.Enqueue(this, (*IDiter).ID);
+            Rio->DoPlaylistContents((*IDiter).ID);
+            for(IDiter = Rio->SongList.begin(); IDiter != Rio->SongList.end();
+                    IDiter++) {
+                Globals::Playlist.Enqueue(Rio, (*IDiter).ID, (*IDiter).Str);
             }
-            Globals::Display.RemoveTopScreen(ActiveMenu);
-            CurrentMenu = 0;
-            return 2;
+            CurrentMenu = MENU_NONE;
+            Globals::Display.RemoveTopScreen(&Menu);
+            Globals::Display.ShowHourglass();
+            Globals::Remote.RemoveHandler();
+            Globals::Playlist.Play();
+            return;
             break;
     }
-    return 0;
+    return;
 }
 
 void RioServerSource::Play(unsigned int ID) {
@@ -482,10 +504,10 @@ void RioServerSource::Play(unsigned int ID) {
     /* Determine audio encoding type and create an instance of the 
        appropriate decoder */
     if(strcmp(TrackTag.Codec, "mp3") == 0) {
-        Dec = new Mp3Decoder(ServerConn->GetDescriptor(), &PlaylistAudioOut, this);
+        Dec = new Mp3Decoder(ServerConn->GetDescriptor(), &Globals::AudioOut, this);
     }
     else if(strcmp(TrackTag.Codec, "flac") == 0) {
-        Dec = new FlacDecoder(ServerConn->GetDescriptor(), &PlaylistAudioOut, this);
+        Dec = new FlacDecoder(ServerConn->GetDescriptor(), &Globals::AudioOut, this);
     }
     else if(strcmp(TrackTag.Codec, "ogg") == 0) {
         Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
@@ -505,4 +527,8 @@ void RioServerSource::Play(unsigned int ID) {
     
     /* Start the decoder process */
     Dec->Start();
+}
+
+CommandHandler *RioServerSource::GetHandler(void) {
+    return Handler;
 }

@@ -15,8 +15,8 @@
 
 #include <pthread.h>
 #include "Screen.hh"
-#include "SmallFont.hh"
 #include "Tag.h"
+#include "VFDLib.hh"
 
 #define MAXSTRINGLENGTH 128
 
@@ -24,21 +24,17 @@ class StatusScreen : public Screen {
 public:
     StatusScreen(void);
     ~StatusScreen(void);
-    virtual void Update(char *Display);
+    virtual void Update(VFDLib &Display);
     void SetTime(unsigned short NewMinutes, unsigned short NewSeconds);
     void SetAttribs(Tag TrackTag);
     
 private:
-    void DrawNum(char *Display, int number, int x, int y);
-    void DrawColon(char *Display, int x, int y);
-    void DrawTime(char *Display, int minutes, int seconds);
     unsigned short Minutes;
     unsigned short Seconds;
     char Title[MAXSTRINGLENGTH];
     char Artist[MAXSTRINGLENGTH];
     char Album[MAXSTRINGLENGTH];
     bool TitleArtistChanged;
-    SmallFont StatusFont;
     pthread_mutex_t ClassMutex;
 };
 

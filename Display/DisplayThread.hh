@@ -20,6 +20,7 @@
 #include "Thread.hh"
 #include "Screen.hh"
 #include "LogoScreen.hh"
+#include "VFDLib.hh"
 
 #define DISPLAY_DELAY 20000
 #define DISPLAY_BACKLIGHT_ON  4
@@ -41,10 +42,8 @@ public:
     
 private:
     void Push(void);
-    void Clear(void);
-    void DrawPixel(bool Set, int x, int y);
     int DisplayFD;
-    char *Display;
+    VFDLib Display;
     Screen *TopScreenPtr;
     Screen *BottomScreenPtr;
     bool TopChanged;
@@ -52,10 +51,6 @@ private:
     LogoScreen Logo;
     int BacklightState;
 };
-
-inline void DisplayThread::Clear(void) {
-    bzero(Display, 4096);
-}
 
 inline void DisplayThread::Push(void) {
     ioctl((DisplayFD), _IO('d', 0));

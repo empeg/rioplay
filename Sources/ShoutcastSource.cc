@@ -24,10 +24,10 @@
 #include "Mp3Decoder.hh"
 #include "FlacDecoder.hh"
 #include "Globals.hh"
+#include "CommandHandler.hh"
 #include "MemAlloc.hh"
 
 extern int errno;
-AudioOutputDevice PlaylistAudioOut;
 
 ShoutcastSource::ShoutcastSource(void) {
     FILE *fp;
@@ -42,6 +42,7 @@ ShoutcastSource::ShoutcastSource(void) {
     StreamNames = NULL;
     StreamUrls = NULL;
     NumUrls = NULL;
+    Handler = new ShoutcastCommandHandler(this);
 
     if((fp = fopen("/etc/streams.cfg", "r"))==NULL){
       Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
@@ -164,46 +165,58 @@ Tag ShoutcastSource::SetMetadata(char *Metadata, int MetadataLength) {
     return ReturnVal;
 }
 
-int ShoutcastSource::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) {
-    static int CurrentMenu = 0;
-    
+ShoutcastCommandHandler::ShoutcastCommandHandler(ShoutcastSource *inShoutcast) {
+    Shoutcast = inShoutcast;
+}
+
+ShoutcastCommandHandler::~ShoutcastCommandHandler(void) {
+}
+
+void ShoutcastCommandHandler::Handle(const unsigned long &Keycode) {
     if((Keycode == PANEL_MENU) || (Keycode == REMOTE_MENU)) {
-        Globals::Display.RemoveTopScreen(ActiveMenu);
-        CurrentMenu = 0;
-        return 0;
+        Globals::Display.RemoveTopScreen(&Menu);
+        Globals::Remote.RemoveHandler();
+        CurrentMenu = MENU_NONE;
+        return;
     }
-    else if((Keycode == PANEL_WHEEL_CW) || (Keycode == REMOTE_DOWN) || (Keycode == REMOTE_DOWN_REPEAT)) {
-        ActiveMenu->Advance();
-        Globals::Display.Update(ActiveMenu);
-        return 1;
+    else if((Keycode == PANEL_WHEEL_CW) || (Keycode == REMOTE_DOWN) ||
+        (Keycode == REMOTE_DOWN_REPEAT)) {
+        Menu.Advance();
+        Globals::Display.Update(&Menu);
+        return;
     }
-    else if((Keycode == PANEL_WHEEL_CCW) || (Keycode == REMOTE_UP) || (Keycode == REMOTE_UP_REPEAT)) {
-        ActiveMenu->Reverse();
-        Globals::Display.Update(ActiveMenu);
-        return 1;
+    else if((Keycode == PANEL_WHEEL_CCW) || (Keycode == REMOTE_UP) ||
+        (Keycode == REMOTE_UP_REPEAT)) {
+        Menu.Reverse();
+        Globals::Display.Update(&Menu);
+        return;
     }
 
     switch(CurrentMenu) {
-        case 0: /* Rio Server Playlist root menu */
-            ActiveMenu->ClearOptions();
-            ActiveMenu->SetTitle("Select Stream");
-            for(int i = 0; i < NumEntries; i++ ) {
-                ActiveMenu->AddOption(StreamNames[i]);
+        case MENU_NONE: /* Shoutcast root menu */
+            Menu.ClearOptions();
+            Menu.SetTitle("Select Stream");
+            for(int i = 0; i < Shoutcast->NumEntries; i++ ) {
+                Menu.AddOption(Shoutcast->StreamNames[i]);
             }
-            CurrentMenu = 1;
-            Globals::Display.Update(ActiveMenu);
-            return 1;
+            CurrentMenu = MENU_STREAM;
+            Globals::Display.SetTopScreen(&Menu);
+            Globals::Display.Update(&Menu);
+            return;
             break;
             
-        case 1:
-            UrlPosition = 1;
-            CurrentMenu = 0;
-            Globals::Display.RemoveTopScreen(ActiveMenu);
-            Globals::Playlist.Enqueue(this, ActiveMenu->GetSelection());
-            return 2;
+        case MENU_STREAM: /* Stream selection menu */
+            Shoutcast->UrlPosition = 1;
+            CurrentMenu = MENU_NONE;
+            Globals::Playlist.Enqueue(Shoutcast, Menu.GetSelection(), 
+                    string(Shoutcast->StreamNames[Menu.GetSelection() - 1]));
+            Globals::Playlist.Play();
+            Globals::Display.RemoveTopScreen(&Menu);
+            Globals::Remote.RemoveHandler();
+            return;
             break;
     }
-    return 0;
+    return;
 }
 
 void ShoutcastSource::Play(unsigned int ID) {
@@ -220,7 +233,11 @@ void ShoutcastSource::Play(unsigned int ID) {
     if(Dec) {
         delete Dec;
     }
-    Dec = new Mp3Decoder(ServerConn->GetDescriptor(), &PlaylistAudioOut, this);
+    Dec = new Mp3Decoder(ServerConn->GetDescriptor(), &Globals::AudioOut, this);
     Dec->SetMetadataFrequency(MetadataFrequency);
     Dec->Start();
+}
+
+CommandHandler *ShoutcastSource::GetHandler(void) {
+    return Handler;
 }

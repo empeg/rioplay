@@ -20,6 +20,7 @@
 #include "Http.hh"
 
 class MenuScreen;
+class CommandHandler;
 
 class InputSource {
 public:
@@ -29,7 +30,6 @@ public:
     virtual void Play(unsigned int ID) = 0;
     virtual Tag GetTag(int EntryNumber) = 0;
     virtual Tag SetMetadata(char *Metadata, int MetadataLength);
-    virtual int CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) = 0;
     void DecoderFinished(void);
 
 protected:
@@ -41,7 +41,6 @@ protected:
     pthread_cond_t ClassCondition;
     HttpConnection *ServerConn;
     int MetadataFrequency;
-//    AudioOutputDevice AudioOut;
         
 private:
 };

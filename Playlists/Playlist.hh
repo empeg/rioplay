@@ -14,8 +14,11 @@
 #define PLAYLIST_HH
 
 #include <vector>
+#include <string>
 #include "Thread.hh"
 #include "InputSource.hh"
+#include "CommandHandler.hh"
+#include "MenuScreen.hh"
 
 #define COMMAND_NULL             0
 #define COMMAND_PLAY             1
@@ -25,19 +28,40 @@
 #define COMMAND_DECODER_FINISHED 5
 #define COMMAND_CLEAR            6
 
+class PlaylistClass;
+
 class PlaylistEntry {
 public:
     InputSource *Source;
     unsigned int SourceID;
+    string Title;
+};
+
+class PlaylistCommandHandler : public CommandHandler {
+public:
+    PlaylistCommandHandler(PlaylistClass *inPList);
+    ~PlaylistCommandHandler(void);
+    void Handle(const unsigned long &Keycode);
+
+private:
+    MenuScreen Menu;
+    enum MenuTypes {
+        MENU_NONE = 0,
+        MENU_PLAYLIST
+    };
+        
+    int CurrentMenu;
+    PlaylistClass *PList;
 };
 
 class PlaylistClass : public Thread {
+friend PlaylistCommandHandler;
 public:
     PlaylistClass(void);
     ~PlaylistClass(void);
     void *ThreadMain(void *arg);
     
-    void Enqueue(InputSource *Source, unsigned int SourceID);
+    void Enqueue(InputSource *Source, unsigned int SourceID, const string &Title);
     void Play(void);
     void DecoderFinished(void);
     void Stop(bool Block = false);
@@ -45,19 +69,23 @@ public:
     void Reverse(void);
     void Clear(void);
     void Randomize(void);
-/*    bool GetRandom(void);
-    void SetRandom(bool inRandom);
-    bool GetRepeat(void);
+    bool GetRandom(void);
+    void SetRandom(void);
+    CommandHandler *GetHandler(void);
+/*    bool GetRepeat(void);
     void SetRepeat(bool inRepeat);*/
     
 private:
 //    void Dequeue(int InternalID);
+    PlaylistEntry GetNextAndErase(void);
     void RequestCommand(int RequestedCommand, bool Block = false);
     vector<PlaylistEntry> Entries;
     vector<PlaylistEntry> PlayedEntries;
     PlaylistEntry CurrentlyPlayingEntry;
     pthread_cond_t NullCommandCondition;
     int Command;
+    bool Random;
+    PlaylistCommandHandler *Handler;
 };
 
 #endif /* #ifndef PLAYLIST_HH */

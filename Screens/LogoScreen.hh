@@ -14,16 +14,15 @@
 #define LOGOSCREEN_HH
 
 #include "Screen.hh"
-#include "SmallFont.hh"
+#include "VFDLib.hh"
 
 class LogoScreen : public Screen {
 public:
     LogoScreen(void);
     ~LogoScreen(void);
-    virtual void Update(char *Display);
+    virtual void Update(VFDLib &Display);
    
 private:
-    SmallFont LogoFont;
 };
 
 #endif /* #ifndef LOGOSCREEN_HH */

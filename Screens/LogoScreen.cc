@@ -24,28 +24,12 @@ LogoScreen::~LogoScreen(void) {
 }
 
 
-void LogoScreen::Update(char *Display) {
-    int x, y;
-    unsigned char fillvalue;
+void LogoScreen::Update(VFDLib &Display) {
     char VersionString[24];
-    
-    for(y = 0; y < 64; y++) {
-        for(x = 0; x < 128; x++) {
-            if(x & 1)
-                fillvalue = 0xf0;
-            else
-                fillvalue = 0x0f;
 
-            if(RioPlayLogo[x + (y * 128)] == 0) {
-                /* Pixel shouuld be filled */
-                Display[(x >> 1) + (64 * y)] |= fillvalue;
-            }
-            else {
-                /* Pixel should be clear */
-                Display[(x >> 1) + (64 * y)] &= ~(fillvalue);
-            }
-        }
-    }
+    Display.setClipArea(0, 0, 128, 64);
+    Display.clear(VFDSHADE_BLACK);
+    Display.drawBitmap(RioPlayLogo, 0, 0, 0, 0, 128, 64, VFDSHADE_BRIGHT, 0);
     sprintf(VersionString, "Version %s", PLAYER_VER);
-    LogoFont.DrawStringCentered(Display, VersionString, 54);
+    Display.drawText(VersionString, (128 - Display.getTextWidth(VersionString, 1)) / 2, 54, 1, -1);
 }

@@ -13,8 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "StatusScreen.hh"
-#include "NumbersBitmaps.h"
 #include "Tag.h"
+#include "Globals.hh"
 #include "MemAlloc.hh"
 
 StatusScreen::StatusScreen(void) {
@@ -30,17 +30,40 @@ StatusScreen::~StatusScreen(void) {
 }
 
 
-void StatusScreen::Update(char *Display) {
+void StatusScreen::Update(VFDLib &Display) {
     pthread_mutex_lock(&ClassMutex);
+    
+    /* Set clipping area */
+    Display.setClipArea(0, 0, 128, 64);
+    
     if(TitleArtistChanged == true) {
-        bzero(Display, 4096);
+        Display.clear(VFDSHADE_BLACK);
         TitleArtistChanged = false;
     }
-    DrawTime(Display, Minutes, Seconds);
-    StatusFont.DrawString(Display, Title, 0, 5);
-    StatusFont.DrawString(Display, Artist, 0, 17);
-    StatusFont.DrawString(Display, Album, 0, 27);
-    DrawHorizontalLine(Display, 0, 15, 128);
+    
+    /* Display title, artist, and album */
+    Display.drawText(Title, 0, 5, 1, -1);
+    Display.drawLineHorizClipped(15, 0, 128, -1);
+    Display.drawText(Artist, 0, 17, 1, -1);
+    Display.drawText(Album, 0, 27, 1, -1);
+        
+    /* Display elapsed time */
+    char TimeString[9];
+    sprintf(TimeString, "%d:%02d", Minutes, Seconds);
+    Display.drawSolidRectangleClipped(64, 62 - Display.getTextHeight(2),
+            128, 64, VFDSHADE_BLACK);
+    Display.drawText(TimeString, 126 - Display.getTextWidth(TimeString, 2),
+            62 - Display.getTextHeight(2), 2, -1);
+    
+    /* Show random status */
+    if(Globals::Playlist.GetRandom() == true) {
+        Display.drawText("RANDOM", 1, 62 - Display.getTextHeight(0), 0, -1);
+    }
+    else {
+        Display.drawSolidRectangleClipped(0, 62 - Display.getTextHeight(0) - 1,
+                Display.getTextWidth("RANDOM", 0) + 2, 64, VFDSHADE_BLACK);
+    }
+    
     pthread_mutex_unlock(&ClassMutex);
 }
 
@@ -63,66 +86,4 @@ void StatusScreen::SetAttribs(Tag TrackTag) {
     
     TitleArtistChanged = true;
     pthread_mutex_unlock(&ClassMutex);
-}
-
-void StatusScreen::DrawTime(char *Display, int minutes, int seconds) {
-    /* Draw minute */
-    DrawNum(Display, minutes % 10, 74, 40);
-    
-    /* Draw colon */
-    DrawColon(Display, 90, 40);
-    
-    /* Draw seconds */
-    DrawNum(Display, seconds / 10, 96, 40);
-    DrawNum(Display, seconds % 10, 112, 40);
-}
-
-void StatusScreen::DrawNum(char *Display, int number, int x, int y) {
-    int tempx, tempy;
-    unsigned char fillvalue;
-    
-    for(tempy = y; tempy < y + 23; tempy++) {
-        for(tempx = x; tempx < x + 16; tempx++) {
-            if(tempx & 1)
-                fillvalue = 0xf0;
-            else
-                fillvalue = 0x0f;
-
-            if(NumberBitmaps[number][(tempx - x) + ((tempy - y) * 17)] == 0) {
-                /* Pixel should be filled */
-                Display[(tempx >> 1) + (64 * tempy)] |= fillvalue;
-            }
-            else {
-                /* Pixel should be cleared */
-                Display[(tempx >> 1) + (64 * tempy)] &= ~(fillvalue);
-            }
-        }
-    }
-}
-
-void StatusScreen::DrawColon(char *Display, int x, int y) {
-    int tempx, tempy;
-    unsigned char fillvalue;
-    
-    for(tempy = (y + 6); tempy < (y + 10); tempy++) {
-        for(tempx = (x + 2); tempx < (x + 6); tempx++) {
-            if(tempx & 1)
-                fillvalue = 0xf0;
-            else
-                fillvalue = 0x0f;
-            
-            Display[(tempx >> 1) + (64 * tempy)] |= fillvalue;
-        }
-    }
-
-    for(tempy = (y + 16); tempy < (y + 20); tempy++) {
-        for(tempx = (x + 2); tempx < (x + 6); tempx++) {
-            if(tempx & 1)
-                fillvalue = 0xf0;
-            else
-                fillvalue = 0x0f;
-            
-            Display[(tempx >> 1) + (64 * tempy)] |= fillvalue;
-        }
-    }
 }

@@ -10,13 +10,10 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-#include <stdio.h>
-#include <string.h>
-#include "Screen.hh"
-#include "MemAlloc.hh"
+#include "CommandHandler.hh"
 
-Screen::Screen(void) {
+CommandHandler::CommandHandler(void) {
 }
 
-Screen::~Screen(void) {
+CommandHandler::~CommandHandler(void) {
 }

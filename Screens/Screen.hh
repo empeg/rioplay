@@ -12,21 +12,15 @@
 
 #ifndef SCREEN_HH
 #define SCREEN_HH
+#include "VFDLib.hh"
 
 class Screen {
 public:
     Screen(void);
     virtual ~Screen(void);
-    virtual void Update(char *Display) = 0;
+    virtual void Update(VFDLib &Display) = 0;
 
 protected:
-    int DrawLetter(char *Display, char Letter, int x, int y);
-    void DrawString(char *Display, char *Text, int x, int y);
-    void CenterString(char *Display, char *Text, int y);
-    void DrawHorizontalLine(char *Display, int x, int y, int length);
-    void DrawVerticalLine(char *Display, int x, int y, int length);
-    void Inverse(char *Display, int StartY, int EndY);
-    void Inverse(char *Display, int TopLeftX, int TopLeftY, int BottomRightX, int BottomRightY);
 };
 
 #endif /* #ifndef SCREEN_HH */

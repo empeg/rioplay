@@ -16,7 +16,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/soundcard.h>
 #include <errno.h>
 #include <sys/time.h>
 #include "RemoteThread.hh"
@@ -35,9 +34,7 @@ RemoteThread::RemoteThread(void) {
     PList = NULL;
     TempPList = NULL;
     IrFD = -1;
-    MixerFD = -1;
-    Volume = 45;
-    InputSourceMenuActive = 0;
+    CustomHandler = NULL;
 
     /* Open IR device for input */
     IrFD = open("/dev/ir", O_RDONLY);
@@ -47,20 +44,10 @@ RemoteThread::RemoteThread(void) {
         pthread_exit((void *) 1);
     }
     
-    /* Open mixer device for output */
-    MixerFD = open("/dev/mixer", O_WRONLY);
-    if(MixerFD < 0) {
-        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
-                "Could not open mixer device");
-        pthread_exit((void *) 1);
-    }
-    
-    SetVolume();
 }
 
 RemoteThread::~RemoteThread(void) {
     close(IrFD);
-    close(MixerFD);
 }
 
 void *RemoteThread::ThreadMain(void *arg) {
@@ -147,16 +134,14 @@ void *RemoteThread::ThreadMain(void *arg) {
 
                 case REMOTE_VOL_UP:
                 case REMOTE_VOL_UP_REPEAT:
-                    Volume += 2;
-                    SetVolume();
-                    //printf("Remote: Volume is now %d\n", Volume);
+                    Globals::AudioOut.SetVolume(
+                            Globals::AudioOut.GetVolume() + 2);
                     break;
 
                 case REMOTE_VOL_DOWN:
                 case REMOTE_VOL_DOWN_REPEAT:
-                    Volume -= 2;
-                    SetVolume();
-                    //printf("Remote: Volume is now %d\n", Volume);
+                    Globals::AudioOut.SetVolume(
+                            Globals::AudioOut.GetVolume() - 2);
                     break;
 
                 case REMOTE_STOP:
@@ -180,7 +165,19 @@ void *RemoteThread::ThreadMain(void *arg) {
                 case REMOTE_RANDOM:
                 case PANEL_RANDOM:
                     /* Randomize playlist */
-                    Globals::Playlist.Randomize();
+                    Globals::Playlist.SetRandom();
+                    Globals::Display.Update(&Globals::Status);
+                    break;
+                    
+                case REMOTE_LIST:
+                    if(CustomHandler == NULL) {
+                        Globals::Remote.InstallHandler(
+                                Globals::Playlist.GetHandler());
+                        CustomHandler->Handle(KeyCode);
+                    }
+                    else if(CustomHandler == Globals::Playlist.GetHandler()) {
+                        CustomHandler->Handle(KeyCode);
+                    }
                     break;
                     
                 case REMOTE_MENU:
@@ -193,26 +190,13 @@ void *RemoteThread::ThreadMain(void *arg) {
                 case PANEL_WHEEL_CW:
                 case PANEL_WHEEL_CCW:
                 case PANEL_WHEEL_BUTTON:
-                    if(InputSourceMenuActive == 0) {
-                        MenuHandleKeypress(KeyCode);
+                    if(CustomHandler == NULL) {
+                        Handler.Handle(KeyCode);
                     }
-                    if(InputSourceMenuActive != 0) {
-                        int TempVal = TempPList->CommandHandler(KeyCode,
-                                &ActiveMenu);
-                        if(TempVal == 0) {
-                            InputSourceMenuActive = 0;
-                            TempPList = NULL;
-                        }
-                        else if(TempVal == 2) {
-                            Globals::Display.ShowHourglass();
-                            InputSourceMenuActive = 0;
-                            pthread_mutex_lock(&ClassMutex);
-                            PList = TempPList;
-                            pthread_mutex_unlock(&ClassMutex);
-                            TempPList = NULL;
-                            Globals::Playlist.Play();
-                            //PList->Play();
-                        }
+                    /* Check to see if a custom handler is now installed 
+                       that should be called */
+                    if(CustomHandler != NULL) {
+                        CustomHandler->Handle(KeyCode);
                     }
                     break;
 
@@ -233,26 +217,6 @@ InputSource *RemoteThread::GetInputSource(void) {
     pthread_mutex_unlock(&ClassMutex);
     
     return ReturnVal;
-}
-
-void RemoteThread::SetVolume() {
-    int VolOut;
-    
-    if(Volume > 100) {
-        Volume = 100;
-    }
-    if(Volume < 0) {
-        Volume = 0;
-    }
-    
-    VolOut = Volume;
-    
-    VolOut = (VolOut & 0xff) | ((VolOut << 8) & 0xff00);
-    if (ioctl(MixerFD, MIXER_WRITE(SOUND_MIXER_VOLUME), &VolOut) == -1) {
-        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
-                "ioctl() failed: %s", strerror(errno));
-        return;
-    }
 }
 
 unsigned long RemoteThread::GetKeycode(void) {
@@ -279,12 +243,30 @@ unsigned long RemoteThread::GetKeycode(void) {
     return ReturnVal;
 }
 
-void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
-    static int CurrentMenu = 0;
+void RemoteThread::InstallHandler(CommandHandler *inCustomHandler) {
+    pthread_mutex_lock(&ClassMutex);
+    CustomHandler = inCustomHandler;
+    pthread_mutex_unlock(&ClassMutex);
+}
+
+void RemoteThread::RemoveHandler(void) {
+    pthread_mutex_lock(&ClassMutex);
+    CustomHandler = NULL;
+    pthread_mutex_unlock(&ClassMutex);
+}
+
+RemoteCommandHandler::RemoteCommandHandler(void) {
+    CurrentMenu = MENU_NONE;
+}
+
+RemoteCommandHandler::~RemoteCommandHandler(void) {
+}
+
+void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
     char TempString[32];
     
     if((KeyCode == PANEL_MENU) || (KeyCode == REMOTE_MENU)) {
-        if(CurrentMenu == 0) {
+        if(CurrentMenu == MENU_NONE) {
             /* This menu is not currently active */
             ActiveMenu.ClearOptions();
             ActiveMenu.SetTitle("Audio Receiver");
@@ -299,20 +281,18 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
             Globals::Display.Update(&ActiveMenu);
 
             /* Update current menu */
-            CurrentMenu = 1;
+            CurrentMenu = MENU_AUDIORECEIVER;
         }
         else {
             /* Menu pressed while a menu was displayed - exit menu system */
             Globals::Display.RemoveTopScreen(&ActiveMenu);
-            CurrentMenu = 0;
+            CurrentMenu = MENU_NONE;
         }
         return;
     }
     else if(KeyCode == PANEL_WHEEL_CW) {
-        if(CurrentMenu == 0) {
-            Volume += 2;
-            SetVolume();
-            //printf("Remote: Volume is now %d\n", Volume);
+        if(CurrentMenu == MENU_NONE) {
+            Globals::AudioOut.SetVolume(Globals::AudioOut.GetVolume() + 2);
         }
         else {
             ActiveMenu.Advance();
@@ -321,10 +301,8 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
         return;
     }
     else if(KeyCode == PANEL_WHEEL_CCW) {
-        if(CurrentMenu == 0) {
-            Volume -= 2;
-            SetVolume();
-            //printf("Remote: Volume is now %d\n", Volume);
+        if(CurrentMenu == MENU_NONE) {
+            Globals::AudioOut.SetVolume(Globals::AudioOut.GetVolume() - 2);
         }
         else {
             ActiveMenu.Advance();
@@ -332,33 +310,33 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
         }
         return;
     }
-    else if(KeyCode == REMOTE_DOWN) {
+    else if((KeyCode == REMOTE_DOWN) || (KeyCode == REMOTE_DOWN_REPEAT)) {
         ActiveMenu.Advance();
         Globals::Display.Update(&ActiveMenu);
         return;
     }
-    else if(KeyCode == REMOTE_UP) {
+    else if((KeyCode == REMOTE_UP) || (KeyCode == REMOTE_UP_REPEAT)) {
         ActiveMenu.Reverse();
         Globals::Display.Update(&ActiveMenu);
         return;
     }
 
     switch(CurrentMenu) {
-        case 1: /* Audio Receiver menu */
+        case MENU_AUDIORECEIVER:
             switch(ActiveMenu.GetSelection()) {
                 case 1:
                     ActiveMenu.ClearOptions();
                     ActiveMenu.SetTitle("Select Music Source");
                     ActiveMenu.AddOption("Rio Server");
                     ActiveMenu.AddOption("Shoutcast");
-                    CurrentMenu = 2;
+                    CurrentMenu = MENU_MUSICSOURCE;
                     Globals::Display.Update(&ActiveMenu);
                     break;
                     
                 case 2: /* Clear Active Playlist */
                     Globals::Playlist.Clear();
                     Globals::Display.RemoveTopScreen(&ActiveMenu);
-                    CurrentMenu = 0;
+                    CurrentMenu = MENU_NONE;
                     break;
                     
                 case 3: /* About Receiver menu */
@@ -368,7 +346,7 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
                     ActiveMenu.AddOption(TempString);
                     ActiveMenu.AddOption("written by");
                     ActiveMenu.AddOption("David Flowerday");
-                    CurrentMenu = 3;
+                    CurrentMenu = MENU_ABOUT;
                     Globals::Display.Update(&ActiveMenu);
                     break;
                     
@@ -378,25 +356,16 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
             }
             break;
             
-        case 2:
+        case MENU_MUSICSOURCE:
             switch(ActiveMenu.GetSelection()) {
-                case 1: /* Select Music selected */
-                    pthread_mutex_lock(&ClassMutex);
-                    TempPList = &Globals::RioServer;
-                    pthread_mutex_unlock(&ClassMutex);
-
-                    InputSourceMenuActive = 1;
-                    CurrentMenu = 0;
+                case 1: /* Rio Server selected */
+                    Globals::Remote.InstallHandler(Globals::RioServer.GetHandler());
+                    CurrentMenu = MENU_NONE;
                     break;
                     
-                case 2:
-                    /* Create InputSource and exit menu */
-                    pthread_mutex_lock(&ClassMutex);
-                    TempPList = &Globals::Shoutcast;
-                    pthread_mutex_unlock(&ClassMutex);
-                    
-                    InputSourceMenuActive = 1;
-                    CurrentMenu = 0;
+                case 2: /* Shoutcast Server selected */
+                    Globals::Remote.InstallHandler(Globals::Shoutcast.GetHandler());
+                    CurrentMenu = MENU_NONE;
                     break;
                     
                 default:
@@ -405,9 +374,9 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
             }
             break;
             
-        case 3:
+        case MENU_ABOUT:
             Globals::Display.RemoveTopScreen(&ActiveMenu);
-            CurrentMenu = 0;
+            CurrentMenu = MENU_NONE;
             break;
     }
 }

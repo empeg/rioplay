@@ -36,10 +36,16 @@ InputSource::~InputSource(void) {
 }
 
 void InputSource::Stop(void) {
+    Tag TrackTag;
+    bzero(&TrackTag, sizeof(Tag));
+    Globals::Status.SetAttribs(TrackTag);
+    Globals::Display.Update(&Globals::Status);
     if(Dec) {
         delete Dec;
         Dec = NULL;
     }
+    Globals::Status.SetTime(0, 0);
+    Globals::Display.Update(&Globals::Status);
     if(ServerConn) {
         delete ServerConn;
         ServerConn = NULL;

@@ -15,12 +15,15 @@
 #include "Playlist.hh"
 #include "Globals.hh"
 #include "MemAlloc.hh"
+#include "KeyCodes.h"
 
 PlaylistClass::PlaylistClass(void) {
     CurrentlyPlayingEntry.Source = NULL;
     CurrentlyPlayingEntry.SourceID = 0;
     pthread_cond_init(&NullCommandCondition, NULL);
     Command = COMMAND_NULL;
+    Random = false;
+    Handler = new PlaylistCommandHandler(this);
     
     /* Initialize random number generator */
     struct timeval tv;
@@ -29,6 +32,7 @@ PlaylistClass::PlaylistClass(void) {
 }
 
 PlaylistClass::~PlaylistClass(void) {
+    delete Handler;
 }
 
 void *PlaylistClass::ThreadMain(void *arg) {
@@ -41,13 +45,9 @@ void *PlaylistClass::ThreadMain(void *arg) {
             case COMMAND_PLAY:
                 if(CurrentlyPlayingEntry.Source == NULL) {
                     if(Entries.size() > 0) {
-                        /* Store entry we're about to play in a
-                           temporary location */
-                        CurrentlyPlayingEntry = Entries[0];
-
-                        /* Remove it from the "to be played" list */
-                        Entries.erase(Entries.begin());
-
+                        /* Get next entry to play */
+                        CurrentlyPlayingEntry = GetNextAndErase();
+                        
                         /* Go ahead and play it */
                         CurrentlyPlayingEntry.Source->Play(CurrentlyPlayingEntry.SourceID);
                     }
@@ -90,12 +90,8 @@ void *PlaylistClass::ThreadMain(void *arg) {
                     PlayedEntries.push_back(CurrentlyPlayingEntry);
                     
                     if(Entries.size() > 0) {
-                        /* Store entry we're about to play in a temporary
-                           location */
-                        CurrentlyPlayingEntry = Entries[0];
-
-                        /* Remove it from the "to be played" list */
-                        Entries.erase(Entries.begin());
+                        /* Get next entry to play */
+                        CurrentlyPlayingEntry = GetNextAndErase();
 
                         /* Go ahead and play it */
                         CurrentlyPlayingEntry.Source->Play(CurrentlyPlayingEntry.SourceID);
@@ -149,11 +145,8 @@ void *PlaylistClass::ThreadMain(void *arg) {
                 
                 /* Play the next song in the list */
                 if(Entries.size() > 0) {
-                    /* Store entry we're about to play in a temporary location */
-                    CurrentlyPlayingEntry = Entries[0];
-                    
-                    /* Remove it from the "to be played" list */
-                    Entries.erase(Entries.begin());
+                    /* Get next entry to play */
+                    CurrentlyPlayingEntry = GetNextAndErase();
                     
                     /* Go ahead and play it */
                     CurrentlyPlayingEntry.Source->Play(CurrentlyPlayingEntry.SourceID);
@@ -195,11 +188,13 @@ void *PlaylistClass::ThreadMain(void *arg) {
     pthread_mutex_unlock(&ClassMutex);
 }
 
-void PlaylistClass::Enqueue(InputSource *Source, unsigned int SourceID) {
+void PlaylistClass::Enqueue(InputSource *Source, unsigned int SourceID,
+        const string &Title) {
     PlaylistEntry TempEntry;
     
     TempEntry.Source = Source;
     TempEntry.SourceID = SourceID;
+    TempEntry.Title = Title;
     
     pthread_mutex_lock(&ClassMutex);
     Entries.push_back(TempEntry);
@@ -256,28 +251,86 @@ void PlaylistClass::Clear(void) {
     RequestCommand(COMMAND_CLEAR);
 }
 
-void PlaylistClass::Randomize(void) {
-    vector<PlaylistEntry> TempEntries;
-    int i;
+PlaylistEntry PlaylistClass::GetNextAndErase(void) {
+    vector<PlaylistEntry>::iterator iter = Entries.begin();
+    PlaylistEntry ReturnVal;
+    
+    if(Random == true) {
+        iter += (1 + (int) ((Entries.size() * 1.0) * rand() /
+                (RAND_MAX + 1.0)));
+    }
+    
+    /* Move from "to be played" list to the currently playing spot */
+    ReturnVal = (*iter);
+
+    /* Remove it from the "to be played" list */
+    Entries.erase(iter);
+    
+    return ReturnVal;
+}
+
+void PlaylistClass::SetRandom(void) {
+    Random = !Random;
+}
+
+bool PlaylistClass::GetRandom(void) {
+    return Random;
+}
+
+CommandHandler *PlaylistClass::GetHandler(void) {
+    return Handler;
+}
+
+PlaylistCommandHandler::PlaylistCommandHandler(PlaylistClass *inPList) {
+    PList = inPList;
+}
+
+PlaylistCommandHandler::~PlaylistCommandHandler(void) {
+}
+
+void PlaylistCommandHandler::Handle(const unsigned long &Keycode) {
     vector<PlaylistEntry>::iterator iter;
     
-    pthread_mutex_lock(&ClassMutex);
-    
-    while(Entries.size() > 0) {
-        /* Get a random entry out of the "to be played" list */
-        i = 1 + (int) ((Entries.size() * 1.0) * rand() / (RAND_MAX + 1.0));
-        
-        /* Add it to the end of the temp list */
-        TempEntries.push_back(Entries[i]);
-        
-        /* Erase from the "to be played" list */
-        iter = Entries.begin();
-        iter += i;
-        Entries.erase(iter);
+    if((Keycode == PANEL_WHEEL_CW) || (Keycode == REMOTE_DOWN) ||
+            (Keycode == REMOTE_DOWN_REPEAT)) {
+        Menu.Advance();
+        Globals::Display.Update(&Menu);
+        return;
     }
-
-    /* Copy randomized temp list back into the "to be played" list */
-    Entries = TempEntries;
-        
-    pthread_mutex_unlock(&ClassMutex);
+    else if((Keycode == PANEL_WHEEL_CCW) || (Keycode == REMOTE_UP) ||
+            (Keycode == REMOTE_UP_REPEAT)) {
+        Menu.Reverse();
+        Globals::Display.Update(&Menu);
+        return;
+    }
+    
+    if(CurrentMenu == MENU_NONE) {
+        Menu.ClearOptions();
+        Menu.SetTitle("Active Playlist");
+        printf("1\n");
+        for(iter = PList->PlayedEntries.begin();
+                iter < PList->PlayedEntries.end(); iter++) {
+            Menu.AddOption((*iter).Title.c_str());
+        }
+        printf("2\n");
+        if(PList->CurrentlyPlayingEntry.Source != NULL) {
+            Menu.AddOption(PList->CurrentlyPlayingEntry.Title.c_str());
+            Menu.SetSelection(PList->PlayedEntries.size() + 1);
+        }
+        printf("3\n");
+        for(iter = PList->Entries.begin(); iter < PList->Entries.end();
+                iter++) {
+            Menu.AddOption((*iter).Title.c_str());
+        }
+        CurrentMenu = MENU_PLAYLIST;
+        Globals::Display.SetTopScreen(&Menu);
+        Globals::Display.Update(&Menu);
+        return;
+    }
+    else {
+        Globals::Display.RemoveTopScreen(&Menu);
+        Globals::Remote.RemoveHandler();
+        CurrentMenu = MENU_NONE;
+        return;
+    }
 }

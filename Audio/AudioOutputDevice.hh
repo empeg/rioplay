@@ -41,6 +41,9 @@ public:
     void SetBitsPerSample(int inBitsPerSample);
     void Play(const mad_fixed_t *Left, const mad_fixed_t *Right,
             unsigned int NumSamples);
+    void Flush(void);
+    void SetVolume(int inVolume);
+    int GetVolume(void);
     
 protected:
     signed int ScaleSample(mad_fixed_t Sample);
@@ -48,11 +51,12 @@ protected:
     int ResampleInit();
     unsigned int ResampleBlock(unsigned int NumSamples,
             mad_fixed_t const *OrigSamples, mad_fixed_t *NewSamples);
-    int AudioFD;
+    int AudioFD, MixerFD;
     unsigned int InSampleRate;
     ResampleState State;
     char OutputBuffer[4608];
     int BitsPerSample;
+    int Volume;
 };
 
 inline void AudioOutputDevice::SetSampleRate(unsigned int newRate) {

@@ -33,10 +33,13 @@ DisplayThread::DisplayThread(void) {
                 "Display: Could not open display");
         return;
     }
-    Display = (char *) mmap(0, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, DisplayFD, 0);
+    char *DisplayBuf = (char *) mmap(0, 4096, PROT_READ | PROT_WRITE,
+            MAP_SHARED, DisplayFD, 0);
+    Display.setBuffer(DisplayBuf);
     
     /* Clear the display */
-    memset(Display, 0, 4096);
+    Display.setClipArea(0, 0, 128, 64);
+    Display.clear(VFDSHADE_BLACK);
     Push();
     
     /* Power on the display */
@@ -63,7 +66,8 @@ void *DisplayThread::ThreadMain(void *arg) {
                than the bottom [for instance a menu screen should
                "cover up" the audio player status screen]) */
             if(TopChanged == true) {
-                Clear();
+                Display.setClipArea(0, 0, 128, 64);
+                Display.clear(VFDSHADE_BLACK);
                 TopChanged = false;
             }
             TopScreenPtr->Update(Display);
@@ -71,7 +75,8 @@ void *DisplayThread::ThreadMain(void *arg) {
         else if(BottomScreenPtr != NULL) {
             /* No top screen, but there is a bottom screen so show that */
             if(BottomChanged == true) {
-                Clear();
+                Display.setClipArea(0, 0, 128, 64);
+                Display.clear(VFDSHADE_BLACK);
                 BottomChanged = false;
             }
             BottomScreenPtr->Update(Display);
@@ -98,23 +103,19 @@ void DisplayThread::SetBottomScreen(Screen *ScreenPtr) {
 }
 
 void DisplayThread::RemoveTopScreen(Screen *ScreenPtr) {
-    Screen *TempScreenPtr = NULL;
-    
     pthread_mutex_lock(&ClassMutex);
     if(ScreenPtr == TopScreenPtr) {
         TopScreenPtr = NULL;
     }
     if(BottomScreenPtr != NULL) {
         /* Call update to redraw the bottom screen */
-        TempScreenPtr = BottomScreenPtr;
-        BottomChanged = true;
+        Display.setClipArea(0, 0, 128, 64);
+        Display.clear(VFDSHADE_BLACK);
+        BottomScreenPtr->Update(Display);
+        Push();
     }
-    pthread_mutex_unlock(&ClassMutex);
     
-    /* Redraw the bottom screen if it's available */
-    if(TempScreenPtr != NULL) {
-        Update(TempScreenPtr);
-    }
+    pthread_mutex_unlock(&ClassMutex);
 }
 
 void DisplayThread::RemoveBottomScreen(Screen *ScreenPtr) {
@@ -147,39 +148,22 @@ void DisplayThread::ShowHourglass(void) {
        next time the screen is updated */
     unsigned int Xoffset = (128 - StopwatchWidth) / 2;
     unsigned int Yoffset = (64 - StopwatchHeight) / 2;
+
+    /* This is an attempt to make sure that any pending display update
+       is handled before the stopwatch is drawn.  Should probably
+       redo this better later on */
+    sched_yield();
     
     pthread_mutex_lock(&ClassMutex);
-    for(unsigned int y = 0; y < StopwatchHeight; y++) {
-        for(unsigned int x = 0; x < StopwatchWidth; x++) {
-            DrawPixel((StopwatchData[(y * StopwatchWidth) + x] == 0),
-                    Xoffset + x, Yoffset + y);
-        }
-    }
+    Display.setClipArea(Xoffset, Yoffset, Xoffset + StopwatchWidth,
+            Yoffset + StopwatchHeight);
+    Display.drawSolidRectangleClipped(Xoffset, Yoffset,
+            Xoffset + StopwatchWidth, Yoffset + StopwatchHeight,
+            VFDSHADE_BLACK);
+    Display.drawBitmap(StopwatchData, Xoffset, Yoffset, 0, 0, StopwatchWidth,
+            StopwatchHeight, -1, 0);
     Push();
     TopChanged = true;
     BottomChanged = true;
     pthread_mutex_unlock(&ClassMutex);
 }
-
-void DisplayThread::DrawPixel(bool Set, int x, int y) {
-    unsigned char fillvalue;
-    
-    if((x >= 128) || (y >= 64)) {
-        return;
-    }
-    
-    if(x & 1)
-        fillvalue = 0xf0;
-    else
-        fillvalue = 0x0f;
-
-    if(Set) {
-        /* Pixel should be filled */
-        Display[(x >> 1) + (64 * y)] |= fillvalue;
-    }
-    else {
-        /* Pixel should be clear */
-        Display[(x >> 1) + (64 * y)] &= ~(fillvalue);
-    }
-}
-    

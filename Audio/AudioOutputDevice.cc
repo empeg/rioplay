@@ -15,9 +15,14 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/soundcard.h>
+#include <errno.h>
+#include <sys/ioctl.h>
 #include "AudioOutputDevice.hh"
 #include "Log.hh"
 #include "MemAlloc.hh"
+
+extern int errno;
 
 AudioOutputDevice::AudioOutputDevice(void) {
     /* Open the audio device for output */
@@ -28,6 +33,16 @@ AudioOutputDevice::AudioOutputDevice(void) {
         return;
     }
     
+    /* Open mixer device for output */
+    MixerFD = open("/dev/mixer", O_WRONLY);
+    if(MixerFD < 0) {
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "Could not open mixer device");
+        return;
+    }
+    
+    SetVolume(45);
+    
     /* Default the sample rate and bits/sample */
     SetSampleRate(44100);
     BitsPerSample = 16;
@@ -35,6 +50,7 @@ AudioOutputDevice::AudioOutputDevice(void) {
 
 AudioOutputDevice::~AudioOutputDevice(void) {
     close(AudioFD);
+    close(MixerFD);
 }
 
 void AudioOutputDevice::Play(const mad_fixed_t *Left, const mad_fixed_t *Right,
@@ -162,4 +178,33 @@ unsigned int AudioOutputDevice::ResampleBlock(unsigned int NumSamples,
 
 void AudioOutputDevice::SetBitsPerSample(int inBitsPerSample) {
     BitsPerSample = inBitsPerSample;
+}
+
+void AudioOutputDevice::Flush(void) {
+    fdatasync(AudioFD);
+}
+
+void AudioOutputDevice::SetVolume(int inVolume) {
+    int VolOut;
+    
+    if(inVolume > 100) {
+        inVolume = 100;
+    }
+    if(inVolume < 0) {
+        inVolume = 0;
+    }
+    
+    Volume = inVolume;
+    VolOut = inVolume;
+    
+    VolOut = (VolOut & 0xff) | ((VolOut << 8) & 0xff00);
+    if (ioctl(MixerFD, MIXER_WRITE(SOUND_MIXER_VOLUME), &VolOut) == -1) {
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "ioctl() failed: %s", strerror(errno));
+        return;
+    }
+}
+
+int AudioOutputDevice::GetVolume(void) {
+    return Volume;
 }

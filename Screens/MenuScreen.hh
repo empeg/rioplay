@@ -14,17 +14,18 @@
 #define MENUSCREEN_HH
 
 #include "Screen.hh"
-#include "SmallFont.hh"
+#include "VFDLib.hh"
 
 class MenuScreen : public Screen {
 public:
     MenuScreen(void);
     ~MenuScreen(void);
-    virtual void Update(char *Display);
+    virtual void Update(VFDLib &Display);
     void SetTitle(char *NewTitle);
     void AddOption(const char *NewOption);
     void ClearOptions(void);
     int GetSelection(void);
+    void SetSelection(int inSelected);
     void Advance(void);
     void Reverse(void);
 
@@ -34,7 +35,6 @@ private:
     int NumOptions;
     int CurrentlySelected;
     int SelectedPos;
-    SmallFont MenuFont;
 };
 
 #endif /* #ifndef MENUSCREEN_HH */
