@@ -165,7 +165,7 @@ int HttpConnection::SkipHeader(void) {
 
 void HttpConnection::UrlEncode(string &Str) {
     string::size_type Pos;
-    string HttpSpace("%%20");
+    string HttpSpace("%20");
     
     while((Pos = Str.find(" ", 0)) != string::npos) {
         Str.replace(Pos, 1, HttpSpace);
