@@ -104,8 +104,8 @@ void *Mp3Decoder::ThreadMain(void *arg) {
     delete ExtBuffer;
     ExtBuffer = NULL;
 
-    Globals::Status.SetTime(0, 0);
-    Globals::Display.Update(&Globals::Status);
+    Globals::Status->SetTime(0, 0);
+    Globals::Display->Update(Globals::Status);
     
     /* Signal our input source that we're done decoding */
     if(Reason != REASON_STOP_REQUESTED) {
@@ -199,8 +199,8 @@ enum mad_flow Mp3Decoder::InputCallback(void *ptr, struct mad_stream *stream) {
             //printf("\n");
 
             TrackTag = PList->SetMetadata(LocalBuffer, MetadataLength);
-            Globals::Status.SetAttribs(TrackTag);
-            Globals::Display.Update(&Globals::Status);
+            Globals::Status->SetAttribs(TrackTag);
+            Globals::Display->Update(Globals::Status);
         }
     }
     else {
@@ -263,12 +263,12 @@ enum mad_flow Mp3Decoder::OutputCallback(void *ptr,
     /* Update time display */
     mad_timer_add(&CurrentTime, header->duration);
     if (LastTime != CurrentTime.seconds) {
-        Globals::Status.SetTime(CurrentTime.seconds / 60,
+        Globals::Status->SetTime(CurrentTime.seconds / 60,
                 CurrentTime.seconds % 60);
         LastTime = CurrentTime.seconds;
 
         /* Signal the display thread that the time has changed */
-        Globals::Display.Update(&Globals::Status);
+        Globals::Display->Update(Globals::Status);
     }
 
     /* Unlock */

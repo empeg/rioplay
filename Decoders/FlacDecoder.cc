@@ -92,8 +92,8 @@ void *FlacDecoder::ThreadMain(void *arg) {
     delete ExtBuffer;
     ExtBuffer = NULL;
 
-    Globals::Status.SetTime(0, 0);
-    Globals::Display.Update(&Globals::Status);
+    Globals::Status->SetTime(0, 0);
+    Globals::Display->Update(Globals::Status);
     
      /* Signal our input source that we're done decoding */
     if(Reason != REASON_STOP_REQUESTED) {
@@ -169,12 +169,12 @@ FLAC__StreamDecoderWriteStatus FlacDecoder::OutputCallback(
     /* Update time display */
     TempTime = frame->header.number.frame_number / frame->header.sample_rate;
     if (LastTime != TempTime) {
-        Globals::Status.SetTime(TempTime / 60,
+        Globals::Status->SetTime(TempTime / 60,
                 TempTime % 60);
         LastTime = TempTime;
 
         /* Signal the display thread that the time has changed */
-        Globals::Display.Update(&Globals::Status);
+        Globals::Display->Update(Globals::Status);
     }
     
     pthread_mutex_unlock(&ClassMutex);

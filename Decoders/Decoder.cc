@@ -28,7 +28,7 @@ Decoder::Decoder(void) {
     Reason = REASON_NONE;
 
     /* Initialize the status display */
-    Globals::Display.SetBottomScreen(&Globals::Status);
+    Globals::Display->SetBottomScreen(Globals::Status);
 }
 
 Decoder::~Decoder(void) {
