@@ -40,7 +40,7 @@ protected:
     pthread_cond_t ClassCondition;
     HttpConnection *ServerConn;
     int MetadataFrequency;
-        
+    int LocalFD;        
 private:
 };
     

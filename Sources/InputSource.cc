@@ -29,6 +29,7 @@ InputSource::InputSource(void) {
     Position = 0;
     Dec = NULL;
     ServerConn = NULL;
+    LocalFD = -1;
 }
 
 InputSource::~InputSource(void) {
@@ -83,8 +84,14 @@ HttpConnection *InputSource::OpenFile(char *Filename) {
     }
     else {
         /* Regular file */
-        fd = open(Filename, O_RDONLY);
-        if(fd < 0) {
+
+	/* This function doesn't do us any favors in this case,
+	 * so we make a local file descriptor to hang on to,
+	 * then close it up when we're done with the decoder.
+	 */
+        LocalFD = open(Filename, O_RDONLY);
+	fd = LocalFD;
+        if(LocalFD < 0) {
             Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
                     "open() failed: %s", strerror(errno));
             return NULL;
@@ -102,6 +109,11 @@ void InputSource::DecoderFinished(void) {
     if(ServerConn != NULL) {
         delete ServerConn;
         ServerConn = NULL;
+    }
+    if (LocalFD >=0)
+    {
+	    close(LocalFD);
+	    LocalFD = -1;
     }
     Globals::Playlist.DecoderFinished();
 }
