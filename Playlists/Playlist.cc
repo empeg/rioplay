@@ -59,15 +59,15 @@ void *PlaylistClass::ThreadMain(void *arg) {
                 else {
                     /* We're already playing something so just ignore this
                        command -- or unpause the transport */
-		    CurrentlyPlayingEntry.Source->SetPause(0);
+                    CurrentlyPlayingEntry.Source->SetPause(false);
                 }
                 break;
  
-	    case COMMAND_PAUSE:
-	        if(CurrentlyPlayingEntry.Source != NULL) {
-		    CurrentlyPlayingEntry.Source->SetPause(1);
-	        }
-    		break;		
+            case COMMAND_PAUSE:
+                if(CurrentlyPlayingEntry.Source != NULL) {
+                    CurrentlyPlayingEntry.Source->SetPause(true);
+                }
+                break;		
                
             case COMMAND_STOP:
                 if(CurrentlyPlayingEntry.Source != NULL) {
