@@ -37,7 +37,8 @@ MenuScreen::~MenuScreen(void) {
 }
 
 void MenuScreen::SetTitle(char *NewTitle) {
-    strcpy(Title, NewTitle);
+    strncpy(Title, NewTitle, 64);
+    Title[63]='\0';
 }
 
 void MenuScreen::AddOption(char *NewOption) {

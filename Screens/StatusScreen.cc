@@ -46,9 +46,14 @@ void StatusScreen::SetTime(unsigned short NewMinutes, unsigned short NewSeconds)
 }
 
 void StatusScreen::SetAttribs(Tag TrackTag) {
-    strcpy(Title, TrackTag.Title);
-    strcpy(Artist, TrackTag.Artist);
-    strcpy(Album, TrackTag.Album);
+    strncpy(Title, TrackTag.Title, MAXSTRINGLENGTH);
+    strncpy(Artist, TrackTag.Artist, MAXSTRINGLENGTH);
+    strncpy(Album, TrackTag.Album, MAXSTRINGLENGTH);
+
+    Title[MAXSTRINGLENGTH-1] = '\0';
+    Artist[MAXSTRINGLENGTH-1] = '\0';
+    Album[MAXSTRINGLENGTH-1] = '\0';
+    
     TitleArtistChanged = true;
 }
 
@@ -76,11 +81,11 @@ void StatusScreen::DrawNum(char *Display, int number, int x, int y) {
                 fillvalue = 0x0f;
 
             if(NumberBitmaps[number][(tempx - x) + ((tempy - y) * 17)] == 0) {
-                /* Pixel shouuld be filled */
+                /* Pixel should be filled */
                 Display[(tempx >> 1) + (64 * tempy)] |= fillvalue;
             }
             else {
-                /* Pixel should be clear */
+                /* Pixel should be cleared */
                 Display[(tempx >> 1) + (64 * tempy)] &= ~(fillvalue);
             }
         }

@@ -17,6 +17,8 @@
 #include "SmallFont.hh"
 #include "Tag.h"
 
+#define MAXSTRINGLENGTH 128
+
 class StatusScreen : public Screen {
 public:
     StatusScreen(void);
@@ -31,9 +33,9 @@ private:
     void DrawTime(char *Display, int minutes, int seconds);
     unsigned short Minutes;
     unsigned short Seconds;
-    char Title[128];
-    char Artist[128];
-    char Album[128];
+    char Title[MAXSTRINGLENGTH];
+    char Artist[MAXSTRINGLENGTH];
+    char Album[MAXSTRINGLENGTH];
     bool TitleArtistChanged;
     SmallFont StatusFont;
 };
