@@ -18,6 +18,7 @@
 #include "Log.hh"
 #include "Globals.hh"
 #include "RioReceiverAudio.hh"
+#include "EmpegAudio.hh"
 #include "MemAlloc.hh"
 
 /* MemAlloc class needs to be declared first so it is destroyed last */
@@ -34,10 +35,17 @@ PlaylistClass Globals::Playlist;
 AudioOutputDevice *Globals::AudioOut = NULL;
 RioServerSource Globals::RioServer;
 ShoutcastSource Globals::Shoutcast;
+int Globals::hw_type;
 Log DummyLog;
+
+#define IDFILE "/proc/empeg_id"
 
 int main() {
     int ReturnVal;
+    char    s[64];
+    char    hwname[32];
+    FILE    *fp;
+
     
     /* Print startup message */
     printf("\n\n");
@@ -45,8 +53,32 @@ int main() {
     printf("%s\n", PLAYER_COPYRIGHT);
     printf("Please see %s for more information\n\n", PLAYER_WEBADDR);
 
+
+    /* Determine what hardware platform we're running on. */
+
+    Globals::hw_type = HWTYP_RIORCV;	/* Default to receiver */
+    strcpy(hwname, HWNM_RIORCV);
+    
+    fp=fopen(IDFILE, "rb");
+    while (fgets(s,sizeof(s), fp) != NULL) {
+            s[strlen(s)-1]='\0';
+	    if (strstr(s, "drives:") != NULL)
+	    {   /* only the empeg has the "drives" parameter */
+	    	Globals::hw_type = HWTYP_EMPEG;
+		strcpy(hwname, HWNM_EMPEG);
+		break;
+	    }
+    }
+    fclose(fp);
+    	
+    printf("Hardware Platform: %s\n\n", hwname); 
+
+
     /* Do hardware dependent setup here */
-    Globals::AudioOut = new RioReceiverAudio;
+    if (Globals::hw_type == HWTYP_RIORCV)
+	Globals::AudioOut = new RioReceiverAudio;
+    else if (Globals::hw_type == HWTYP_EMPEG)
+	Globals::AudioOut = new EmpegAudio;
     
     /* Create Playlist thread */
     Globals::Playlist.Start();
