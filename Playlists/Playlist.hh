@@ -74,6 +74,7 @@ public:
     bool GetRandom(void);
     void SetRandom(void);
     CommandHandler *GetHandler(void);
+    bool GetPlaying(void) { return isPlaying; }
 /*    bool GetRepeat(void);
     void SetRepeat(bool inRepeat);*/
     
@@ -88,6 +89,7 @@ private:
     int Command;
     bool Random;
     PlaylistCommandHandler *Handler;
+    bool isPlaying;
 };
 
 #endif /* #ifndef PLAYLIST_HH */
