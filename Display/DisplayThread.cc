@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include "DisplayThread.hh"
+#include "Log.hh"
 
 DisplayThread::DisplayThread(void) {
     /* Initialize class variables */
@@ -25,7 +26,8 @@ DisplayThread::DisplayThread(void) {
     /* Open display device */
     DisplayFD = open("/dev/display", O_RDWR);
     if(DisplayFD < 0) {
-        printf("Display: Could not open display\n");
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "Display: Could not open display");
         return;
     }
     Display = (char *) mmap(0, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, DisplayFD, 0);

@@ -10,11 +10,18 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-#include <stdio.h>
-#include <unistd.h>
-#include <pthread.h>
-#include "WebMain.h"
+#ifndef WEBTHREAD_HH
+#define WEBTHREAD_HH
 
-void *WebMain(void *arg) {
-    pthread_exit(0);    
-}
+#include "Thread.hh"
+
+class WebThread : public Thread {
+public:
+    WebThread(void);
+    ~WebThread(void);
+    virtual void *ThreadMain(void *arg);
+    
+private:
+};
+
+#endif /* #ifndef WEBTHREAD_HH */

@@ -1,4 +1,4 @@
-SUBDIRS = Main Audio Display Remote Web Utils Screens Fonts Playlists
+SUBDIRS = Main Audio Display Remote Web Utils Screens Fonts Playlists Log Wrapper
 export INCLUDEDIRS = -I../Main/ \
                      -I../Audio/ \
                      -I../Display/ \
@@ -7,7 +7,9 @@ export INCLUDEDIRS = -I../Main/ \
                      -I../Utils/ \
                      -I../Screens/ \
                      -I../Fonts/ \
-                     -I../Playlists/
+                     -I../Playlists/ \
+                     -I../Log/
+
 OBJS = Main/Main.o \
        Audio/Audio.o \
        Display/Display.o \
@@ -16,23 +18,28 @@ OBJS = Main/Main.o \
        Utils/Utils.o \
        Screens/Screens.o \
        Fonts/Fonts.o \
-       Playlists/Playlists.o
+       Playlists/Playlists.o \
+       Log/Log.o \
+       /skiff/local/arm-linux/lib/libpthread.a
 export CFLAGS = -O3 -Wall
 CC = gcc
 export C++ = g++
-LIBS = -lpthread
+#LIBS = -lpthread
 
-all: buildparts rioplay
+all: buildparts rioplay init
 
 rioplay: $(OBJS)
-	arm-linux-gcc -o rioplay $(CFLAGS) $(LIBS) $(OBJS)
+	$(C++) -o rioplay $(CFLAGS) $(LIBS) $(OBJS)
 
 buildparts:
 	@for dir in ${SUBDIRS}; \
-    do \
+	do \
 		(cd $$dir; ${MAKE}); \
 	done
 
+init: Wrapper/Wrapper.o
+	gcc -o init $(CFLAGS) Wrapper/Wrapper.o
+
 clean:
 	find . -name *.o | xargs rm -f
-	rm -f rioplay
+	rm -f rioplay init

@@ -17,14 +17,19 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <errno.h>
 #include "RioServerList.hh"
 #include "Playlist.hh"
-#include "Http.h"
+#include "Http.hh"
 #include "Screen.hh"
 #include "DisplayThread.hh"
 #include "Commands.h"
 #include "MenuScreen.hh"
 #include "KeyCodes.h"
+#include "Log.hh"
+#include "MemAlloc.hh"
+
+extern int errno;
 
 extern DisplayThread Display;
 
@@ -43,7 +48,8 @@ RioServerList::RioServerList(void) {
     
     /* Time to find the server... */
     if((SSDP = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        printf("RioServerList: Could not get socket\n");
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "socket() failed");
         return;
     }
 
@@ -58,17 +64,22 @@ RioServerList::RioServerList(void) {
 
     if((bind(SSDP, (struct sockaddr *) &LocalAddr, sizeof(LocalAddr))) < 0)
     {
-        printf("RioServerList: Could not bind\n");
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "bind() failed: %s", strerror(errno));
         return;
     }
 
     if(setsockopt(SSDP, SOL_SOCKET, SO_BROADCAST, &One, sizeof(One)) < 0) {
-        perror("RioServerList: Setsockopt");
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "setsockopt() failed: %s", strerror(errno));
+        return;
     }
     
     if(sendto(SSDP, SSDPRequest, strlen(SSDPRequest), 0,
             (struct sockaddr *) &BroadcastAddr, sizeof(BroadcastAddr)) < 0) {
-        perror("RioServerList: Sendto");
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "sendto() failed: %s", strerror(errno));
+        return;
     }
 
     fp = fdopen(SSDP, "r");
@@ -81,55 +92,62 @@ RioServerList::RioServerList(void) {
     Server[ColonLoc - HttpLoc - 1] = '\0';
     Port = atoi(ColonLoc);
     
-    close(SSDP);
+    fclose(fp);
 }
 
 RioServerList::~RioServerList(void) {
     for(int i = 0; i < NumEntries; i++) {
-        free(List[i]);
+        __free(List[i]);
     }
     if(List != NULL) {
-        free(List);
+        __free(List);
+    }
+    if(SongID != NULL) {
+        __free(SongID);
     }
 }
 
 void RioServerList::DoQuery(char *Field, char *Query) {
-    FILE *QueryFP;
+    HttpConnection *Http = NULL;
     char TempString[128];
     char *TempPtr;
     int i;
+    FILE *fp;
     
     strcpy(SearchField, Field);
     
     /* Open a connection to the Rio HTTP Server */    
-    if((QueryFP = HttpConnect(Server, Port)) == NULL) {
+    sprintf(TempString, "http://%s:%d/query?%s=%s", Server, Port, Field, Query);
+    Http = new HttpConnection(TempString);
+    if(Http->Connect() < 0) {
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "HttpConnection::Connect() failed");
         return;
     }
-    
-    /* Send HTTP request */
-    sprintf(TempString, "GET /query?%s=%s HTTP/1.0\r\n\r\n", Field, Query);
-    fwrite(TempString, 1, strlen(TempString), QueryFP);
 
     /* Find end of HTTP Header */
-    HttpSkipHeader(QueryFP);
+    Http->SkipHeader();
+    
+    /* Open descriptor as a file so we can use fgets */
+    fp = Http->GetFilePointer();
     
     /* Throw away "matches=" response */
-    fgets(TempString, 128, QueryFP);
+    fgets(TempString, 128, fp);
 
     /* Free the old list */
     if(List != NULL) {
         for(i = 0; i < NumEntries; i++) {
-            free(List[i]);
+            __free(List[i]);
         }
-        free(List);
+        __free(List);
         List = NULL;
     }
     
     /* Read query responses */
-    for(i = 0; fgets(TempString, 128, QueryFP) != NULL; i++) {
+    for(i = 0; fgets(TempString, 128, fp) > 0; i++) {
         /* Check to see if we need to expand the array */
         if((i % 10) == 0) {
-            List = (char **) realloc(List, sizeof(char *) * (i + 10));
+            List = (char **) __realloc(List, sizeof(char *) * (i + 10));
         }
         
         /* fgets() does not remove trailing '\n', so 
@@ -142,7 +160,7 @@ void RioServerList::DoQuery(char *Field, char *Query) {
         TempPtr = strstr(TempString, ":") + 1;
         
         /* Allocate space for the title string */
-        List[i] = (char *) malloc(sizeof(char) * (strlen(TempPtr) + 1));
+        List[i] = (char *) __malloc(sizeof(char) * (strlen(TempPtr) + 1));
         
         /* Assign */
         strcpy(List[i], TempPtr);
@@ -156,44 +174,46 @@ void RioServerList::DoQuery(char *Field, char *Query) {
     }
 
     /* Close file descriptor and socket */
-    fclose(QueryFP);
+    delete Http;
 }
 
 void RioServerList::DoResults(char *Field, char *Query) {
-    FILE *QueryFP;
+    HttpConnection *Http = NULL;
     char TempString[128];
     int TempSongID;
     int i;
+    FILE *fp;
 
     NumSongIDEntries = 0;
     SongIDPosition = 0;
     
     /* Open a connection to the Rio HTTP Server */    
-    if((QueryFP = HttpConnect(Server, Port)) == NULL) {
-        printf("HttpConnect failed!\n");
+    sprintf(TempString, "http://%s:%d/results?%s=%s&_extended=1", Server, Port, Field, Query);
+    Http = new HttpConnection(TempString);
+    if(Http->Connect() < 0) {
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "HttpConnection::Connect() failed");
         return;
     }
 
-    /* Send HTTP request */
-    sprintf(TempString, "GET /results?%s=%s&_extended=1 HTTP/1.0\r\n\r\n",
-            Field, Query);
-    fwrite(TempString, 1, strlen(TempString), QueryFP);
-
     /* Find end of HTTP Header */
-    HttpSkipHeader(QueryFP);
+    Http->SkipHeader();
+    
+    /* Open descriptor as a file so we can use fgets */
+    fp = Http->GetFilePointer();
     
     /* Free SongID list */
     if(SongID != NULL) {
-        free(SongID);
+        __free(SongID);
         SongID = NULL;
     }
     
     /* Read the Song ID */
-    for(i = 0; fgets(TempString, 128, QueryFP) != NULL; i++) {
+    for(i = 0; fgets(TempString, 128, fp) > 0; i++) {
         sscanf(TempString, "%x=", &TempSongID);
         /* Check to see if we need to expand the array */
         if((i % 10) == 0) {
-            SongID = (int *) realloc(SongID, sizeof(int) * (i + 10));
+            SongID = (int *) __realloc(SongID, sizeof(int) * (i + 10));
         }
         SongID[i] = TempSongID;
     }
@@ -201,49 +221,50 @@ void RioServerList::DoResults(char *Field, char *Query) {
     SongIDPosition = 1;
 
     /* Close file descriptor and socket */
-    fclose(QueryFP);
-    
-    /* Return the result */
-    return;
+    delete Http;
 }
 
 void RioServerList::DoPlaylists(void) {
-    FILE *QueryFP;
+    HttpConnection *Http = NULL;
     char TempString[128];
     char *TempPtr;
     int i;
+    FILE *fp;
     
     /* Open a connection to the Rio HTTP Server */    
-    if((QueryFP = HttpConnect(Server, Port)) == NULL) {
+    sprintf(TempString, "http://%s:%d/content/100?_extended=1", Server, Port);
+    Http = new HttpConnection(TempString);
+    if(Http->Connect() < 0) {
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "HttpConnection::Connect() failed");
         return;
     }
-    
-    /* Send HTTP request */
-    sprintf(TempString, "GET /content/100?_extended=1 HTTP/1.0\r\n\r\n");
-    fwrite(TempString, 1, strlen(TempString), QueryFP);
 
     /* Find end of HTTP Header */
-    HttpSkipHeader(QueryFP);
+    Http->SkipHeader();
+    
+    /* Open descriptor as a file so we can use fgets */
+    fp = Http->GetFilePointer();
     
     /* Free the old list */
     if(List != NULL) {
         for(i = 0; i < NumEntries; i++) {
-            free(List[i]);
+            __free(List[i]);
         }
-        free(List);
+        __free(List);
         List = NULL;
     }
     if(SongID != NULL) {
-        free(SongID);
+        __free(SongID);
         SongID = NULL;
     }
     
     /* Read query responses */
-    for(i = 0; fgets(TempString, 128, QueryFP) != NULL; i++) {
+    for(i = 0; fgets(TempString, 128, fp) > 0; i++) {
         /* Check to see if we need to expand the array */
         if((i % 10) == 0) {
-            List = (char **) realloc(List, sizeof(char *) * (i + 10));
-            SongID = (int *) realloc(SongID, sizeof(int) * (i + 10));
+            List = (char **) __realloc(List, sizeof(char *) * (i + 10));
+            SongID = (int *) __realloc(SongID, sizeof(int) * (i + 10));
         }
         
         /* fgets() does not remove trailing '\n', so 
@@ -256,7 +277,7 @@ void RioServerList::DoPlaylists(void) {
         TempPtr = strstr(TempString, "=") + 2;
         
         /* Allocate space for the title string */
-        List[i] = (char *) malloc(sizeof(char) * (strlen(TempPtr) + 1));
+        List[i] = (char *) __malloc(sizeof(char) * (strlen(TempPtr) + 1));
         
         /* Assign */
         strcpy(List[i], TempPtr);
@@ -274,39 +295,43 @@ void RioServerList::DoPlaylists(void) {
     }
 
     /* Close file descriptor and socket */
-    fclose(QueryFP);
+    delete Http;
 }
 
 void RioServerList::DoPlaylistContents(int ID) {
-    FILE *QueryFP;
+    HttpConnection *Http = NULL;
     char TempString[128];
     int i;
     int TempSongID;
+    FILE *fp;
     
     /* Open a connection to the Rio HTTP Server */    
-    if((QueryFP = HttpConnect(Server, Port)) == NULL) {
+    sprintf(TempString, "http://%s:%d/content/%x?_extended=1", Server, Port, ID);
+    Http = new HttpConnection(TempString);
+    if(Http->Connect() < 0) {
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "HttpConnection::Connect() failed");
         return;
     }
-    
-    /* Send HTTP request */
-    sprintf(TempString, "GET /content/%x?_extended=1 HTTP/1.0\r\n\r\n", ID);
-    fwrite(TempString, 1, strlen(TempString), QueryFP);
 
     /* Find end of HTTP Header */
-    HttpSkipHeader(QueryFP);
+    Http->SkipHeader();
+    
+    /* Open descriptor as a file so we can use fgets */
+    fp = Http->GetFilePointer();
     
     /* Free SongID list */
     if(SongID != NULL) {
-        free(SongID);
+        __free(SongID);
         SongID = NULL;
     }
     
     /* Read the Song ID */
-    for(i = 0; fgets(TempString, 128, QueryFP) != NULL; i++) {
+    for(i = 0; fgets(TempString, 128, fp) > 0; i++) {
         sscanf(TempString, "%x=", &TempSongID);
         /* Check to see if we need to expand the array */
         if((i % 10) == 0) {
-            SongID = (int *) realloc(SongID, sizeof(int) * (i + 10));
+            SongID = (int *) __realloc(SongID, sizeof(int) * (i + 10));
         }
         SongID[i] = TempSongID;
     }
@@ -314,14 +339,15 @@ void RioServerList::DoPlaylistContents(int ID) {
     SongIDPosition = 1;
 
     /* Close file descriptor and socket */
-    fclose(QueryFP);
+    delete Http;
     
     /* Return the result */
     return;
 }
 
 Tag RioServerList::GetTag(int EntryNumber) {
-    FILE *QueryFP;
+    HttpConnection *Http = NULL;
+    int QueryFD;
     char TempString[128];
     Tag ReturnVal;
     char Data[128];
@@ -336,21 +362,21 @@ Tag RioServerList::GetTag(int EntryNumber) {
     }
     
     /* Open a connection to the Rio HTTP Server */    
-    if((QueryFP = HttpConnect(Server, Port)) == NULL) {
+    sprintf(TempString, "http://%s:%d/tags/%x", Server, Port, SongID[EntryNumber - 1]);
+    Http = new HttpConnection(TempString);
+    if((QueryFD = Http->Connect()) < 0) {
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "HttpConnection::Connect() failed");
         return ReturnVal;
     }
 
-    /* Send HTTP request */
-    sprintf(TempString, "GET /tags/%x HTTP/1.0\r\n\r\n", SongID[EntryNumber - 1]);
-    fwrite(TempString, 1, strlen(TempString), QueryFP);
-
     /* Find end of HTTP Header */
-    HttpSkipHeader(QueryFP);
+    Http->SkipHeader();
     
     /* Parse tag data */
-    while(fread(&Key, 1, 1, QueryFP)) {
-        fread(&Size, 1, 1, QueryFP);
-        fread(Data, 1, Size, QueryFP);
+    while(read(QueryFD, &Key, 1)) {
+        read(QueryFD, &Size, 1);
+        read(QueryFD, Data, Size);
         
         switch(Key) {
             case TAG_KEY_TITLE:
@@ -376,8 +402,9 @@ Tag RioServerList::GetTag(int EntryNumber) {
                 break;
         }
     }
-    
-    fclose(QueryFP);
+
+    /* Close file descriptor and socket */
+    delete Http;    
     
     /* Return the array of results */
     return ReturnVal;
@@ -464,20 +491,20 @@ int RioServerList::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) 
             if(Selection > 1) {
                 if(Selection == 2) {
                     for(int i = 1; i < NumEntries; i++) {
-                        free(List[i]);
+                        __free(List[i]);
                     }
                     NumEntries = 1;
                 }
                 else {
-                    List[0] = (char *) realloc(List[0], strlen(List[Selection - 2]) + 1);
+                    List[0] = (char *) __realloc(List[0], strlen(List[Selection - 2]) + 1);
                     strcpy(List[0], List[Selection - 2]);
                     for(int i = 1; i < NumEntries; i++) {
-                        free(List[i]);
+                        __free(List[i]);
                     }
                     NumEntries = 1;
                 }
             }
-            DoResults(SearchField, HttpUrlEncode(&List[0]));
+            DoResults(SearchField, HttpConnection::UrlEncode(&List[0]));
             Display.RemoveTopScreen(ActiveMenu);
             CurrentMenu = 0;
             return 2;
@@ -506,7 +533,7 @@ void RioServerList::Advance(void) {
         
         /* Build a new sub-list of SongIDs */
         if(OldPosition != Position) {
-            DoResults(SearchField, HttpUrlEncode(&List[Position - 1]));
+            DoResults(SearchField, HttpConnection::UrlEncode(&List[Position - 1]));
         }
         SongIDPosition = 1;
     }
@@ -523,7 +550,7 @@ void RioServerList::Reverse(void) {
 
         /* Build a new sub-list of SongIDs */
         if(OldPosition != Position) {
-            DoResults(SearchField, HttpUrlEncode(&List[Position - 1]));
+            DoResults(SearchField, HttpConnection::UrlEncode(&List[Position - 1]));
         }
         SongIDPosition = NumSongIDEntries;
     }

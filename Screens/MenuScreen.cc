@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <string.h>
 #include "MenuScreen.hh"
+#include "MemAlloc.hh"
 
 MenuScreen::MenuScreen(void) {
     Title[0] = '\0';
@@ -28,10 +29,10 @@ MenuScreen::~MenuScreen(void) {
     int i;
     
     for(i = 0; i < NumOptions; i++) {
-        free(Options[i]);
+        __free(Options[i]);
     }
     if(Options != NULL) {
-        free(Options);
+        __free(Options);
     }
 }
 
@@ -41,10 +42,10 @@ void MenuScreen::SetTitle(char *NewTitle) {
 
 void MenuScreen::AddOption(char *NewOption) {
     if((NumOptions % 5) == 0) {
-        Options = (char **) realloc(Options, sizeof(char *) * (NumOptions + 5));
+        Options = (char **) __realloc(Options, sizeof(char *) * (NumOptions + 5));
     }
     
-    Options[NumOptions] = (char *) malloc(sizeof(char) * (strlen(NewOption) + 1));
+    Options[NumOptions] = (char *) __malloc(sizeof(char) * (strlen(NewOption) + 1));
     
     strcpy(Options[NumOptions], NewOption);
     
@@ -59,10 +60,10 @@ void MenuScreen::ClearOptions(void) {
     int i;
 
     for(i = 0; i < NumOptions; i++) {
-        free(Options[i]);
+        __free(Options[i]);
     }
     if(Options != NULL) {
-        free(Options);
+        __free(Options);
         Options = NULL;
     }
     NumOptions = 0;

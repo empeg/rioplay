@@ -1,5 +1,5 @@
-Web.o: WebMain.o
-	ld -r -o Web.o WebMain.o
+Web.o: WebThread.o
+	ld -r -o Web.o WebThread.o
     
-WebMain.o: WebMain.c
-	gcc -c -o WebMain.o $(CFLAGS) WebMain.c -I../Main/
+WebThread.o: WebThread.cc WebThread.hh
+	$(C++) -c -o WebThread.o $(CFLAGS) WebThread.cc $(INCLUDEDIRS)

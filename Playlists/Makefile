@@ -1,6 +1,3 @@
-C++ = g++
-INCLUDEDIRS = -I../Main/ -I../Utils/ -I../Screens/ -I../Display/ -I../Audio/ -I../Fonts/ -I../Main/ -I../Remote/
-
 Playlists.o: Playlist.o RioServerList.o ShoutcastList.o
 	ld -r -o Playlists.o Playlist.o RioServerList.o ShoutcastList.o
     

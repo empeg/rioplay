@@ -21,6 +21,10 @@
 #include "Screen.hh"
 #include "LogoScreen.hh"
 
+#define DISPLAY_DELAY 20000
+#define DISPLAY_BACKLIGHT_ON  4
+#define DISPLAY_BACKLIGHT_OFF 0
+
 class DisplayThread : public Thread {
 public:
     DisplayThread(void);
@@ -32,6 +36,7 @@ public:
     void RemoveBottomScreen(Screen *ScreenPtr);
     void Update(Screen *ScreenPtr);
     void OnOff(int OnOff);
+    void Backlight(int State);
     
 private:
     void Push(void);
@@ -51,19 +56,19 @@ inline void DisplayThread::Clear(void) {
 
 inline void DisplayThread::Push(void) {
     ioctl((DisplayFD), _IO('d', 0));
-    usleep(200000);
+    usleep(DISPLAY_DELAY);
 }
 
 inline void DisplayThread::OnOff(int OnOff) {
     /* Power on/off the display */
     ioctl((DisplayFD), _IOW('d', 1, int), (OnOff));
-    usleep(200000);
-    
-    /* Redisplay the correct screen if one is present */
-//    if(OnOff != 0) {
-//        Update(BottomScreenPtr);
-//        Update(TopScreenPtr);
-//   }
+    usleep(DISPLAY_DELAY);
+}
+
+inline void DisplayThread::Backlight(int State) {
+    /* Turn on/off the backlight */
+    ioctl((DisplayFD), _IOW('d', 11, int), &State);
+    usleep(DISPLAY_DELAY);
 }
 
 #endif /* #ifndef DISPLAY_HH */

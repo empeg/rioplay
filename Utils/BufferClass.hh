@@ -10,14 +10,27 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-#ifndef HTTP_H
-#define HTTP_H
+#ifndef BUFFERCLASS_HH
+#define BUFFERCLASS_HH
 
-#include <stdio.h>
+#include "Thread.hh"
 
-FILE *HttpConnect(char *Host, unsigned short Port);
-void HttpParseUrl(char *Url, char *Host, unsigned short *Port, char *Path);
-int HttpSkipHeader(FILE *fp);
-char *HttpUrlEncode(char **string);
+class BufferClass : public Thread {
+public:
+    BufferClass(int inFileD, int inBufSize);
+    ~BufferClass(void);
+    int ReadNB(void *BufOut, int NumBytes);
+    void *ThreadMain(void *arg);
+    void Prebuffer(void);
+    
+private:
+    int FileD; /* File descriptor to read from */
+    pthread_t ReaderThreadID;
+    char *Buf;
+    int BufferSize;
+    int BytesInBuffer;
+    bool ReaderThreadActive;
+    bool BufferFull;
+};
 
-#endif /* #ifndef HTTP_H */
+#endif /* #ifndef BUFFERCLASS_HH */

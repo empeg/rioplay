@@ -17,6 +17,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/soundcard.h>
+#include <errno.h>
+#include <sys/time.h>
 #include "RemoteThread.hh"
 #include "DisplayThread.hh"
 #include "AudioThread.hh"
@@ -26,6 +28,9 @@
 #include "MenuScreen.hh"
 #include "Commands.h"
 #include "Player.h"
+#include "Log.hh"
+
+extern int errno;
 
 extern DisplayThread Display;
 extern AudioThread Audio;
@@ -41,14 +46,16 @@ RemoteThread::RemoteThread(void) {
     /* Open IR device for input */
     IrFD = open("/dev/ir", O_RDONLY);
     if(IrFD < 0) {
-        printf("Remote: Error: Could not open IR device\n");
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "Could not open IR device");
         pthread_exit(0);
     }
     
     /* Open mixer device for output */
     MixerFD = open("/dev/mixer", O_WRONLY);
     if(MixerFD < 0) {
-        printf("Remote: Error: Could not open Mixer device\n");
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "Could not open mixer device");
         pthread_exit(0);
     }
     
@@ -71,138 +78,159 @@ void *RemoteThread::ThreadMain(void *arg) {
     while(1) {
         /* Handle the keypress */
         KeyCode = GetKeycode();
-        switch(KeyCode) {
-            case PANEL_POWER_UP:
-                /* Check to see if power button was held for a long time */
-                if((time(NULL) - timer) >= 5) {
-                    printf("Remote: Received reboot command\n");
-                    /* Turn off LCD */
-                    Display.OnOff(0);
-                    exit(1);
-                }
-                if((time(NULL) - timer) >= 2) {
-                    printf("Remote: Received stop app command\n");
-                    /* Turn off LCD */
-                    Display.OnOff(0);
-                    exit(0);
-                }
-                /* No break: we want to spill into the next case */
-            case REMOTE_POWER:
-                /* Stop audio playback */
-                Audio.SetRequestedCommand(COMMAND_STOP);
-                                
-                /* Turn off LCD */
-                Display.OnOff(0);
-
-                /* Wait for power on again */
-                for(unsigned long Key = 0; (Key != REMOTE_POWER) && 
-                        (Key != PANEL_POWER_UP); Key = GetKeycode());
-                timer = time(NULL);
-                
-                /* Resume audio */
-                Audio.SetRequestedCommand(COMMAND_PLAY);
-
-                /* Turn on LCD */
-                Display.OnOff(1);
-                break;
-               
-            case PANEL_POWER_DOWN:
-                /* If user presses and holds the panel power button,
-                   exit the player app */
-                timer = time(NULL);
-                 
-            case REMOTE_PLAY:
-            case PANEL_PLAY:
-                /* Set command to play */
-                if(Audio.GetActualCommand() == COMMAND_PLAY) {
-                    Audio.SetRequestedCommand(COMMAND_PAUSE);
-                }
-                else {
-                    Audio.SetRequestedCommand(COMMAND_PLAY);
-                }
-                break;
-
-            case REMOTE_VOL_UP:
-            case REMOTE_VOL_UP_REPEAT:
-                Volume += 2;
-                SetVolume();
-                printf("Remote: Volume is now %d\n", Volume);
-                break;
-                
-            case REMOTE_VOL_DOWN:
-            case REMOTE_VOL_DOWN_REPEAT:
-                Volume -= 2;
-                SetVolume();
-                printf("Remote: Volume is now %d\n", Volume);
-                break;
-                
-            case REMOTE_STOP:
-            case PANEL_STOP:
-                /* Change requested command */
-                Audio.SetRequestedCommand(COMMAND_STOP);
-                break;
-                
-            case REMOTE_FORWARD:
-            case PANEL_FORWARD:
-                pthread_mutex_lock(&ClassMutex);
-                if(PList) {
-                    PList->Advance();
-                }
-                pthread_mutex_unlock(&ClassMutex);
-                
-                /* Change requested command */
-                Audio.SetRequestedCommand(COMMAND_CHANGESONG);
-                break;
-                
-            case REMOTE_REVERSE:
-            case PANEL_REVERSE:
-                pthread_mutex_lock(&ClassMutex);
-                if(PList) {
-                    PList->Reverse();
-                }
-                pthread_mutex_unlock(&ClassMutex);
-                
-                /* Change requested command */
-                Audio.SetRequestedCommand(COMMAND_CHANGESONG);
-                break;
-                
-            case REMOTE_MENU:
-            case PANEL_MENU:
-            case REMOTE_DOWN:
-            case REMOTE_UP:
-            case REMOTE_DOWN_REPEAT:
-            case REMOTE_UP_REPEAT:
-            case REMOTE_ENTER:
-            case PANEL_WHEEL_CW:
-            case PANEL_WHEEL_CCW:
-            case PANEL_WHEEL_BUTTON:
-                if(PlaylistMenuActive == 0) {
-                    MenuHandleKeypress(KeyCode);
-                }
-                if(PlaylistMenuActive != 0) {
-                    int TempVal = TempPList->CommandHandler(KeyCode, &ActiveMenu);
-                    if(TempVal == 0) {
-                        PlaylistMenuActive = 0;
-                        delete TempPList;
-                        TempPList = NULL;
+        
+        if(KeyCode == 0) {
+            /* Turn off backlight due to timeout */
+            Display.Backlight(DISPLAY_BACKLIGHT_OFF);
+        }
+        else {
+            /* Turn on backlight due to keypress */
+            Display.Backlight(DISPLAY_BACKLIGHT_ON);
+        
+            switch(KeyCode) {
+                case PANEL_POWER_UP:
+                    /* Check to see if power button was held for a long time */
+                    if((time(NULL) - timer) >= 5) {
+                        Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
+                                "Received reboot command");
+                        /* Turn off LCD */
+                        Display.OnOff(0);
+                        exit(1);
                     }
-                    else if(TempVal == 2) {
-                        PlaylistMenuActive = 0;
-                        pthread_mutex_lock(&ClassMutex);
-                        if(PList != NULL) {
-                            delete PList;
+                    if((time(NULL) - timer) >= 2) {
+                        Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
+                                "Received stop app command");
+                        /* Turn off LCD */
+                        Display.OnOff(0);
+                        exit(0);
+                    }
+                    /* No break: we want to spill into the next case */
+                case REMOTE_POWER:
+                    /* Stop audio playback */
+                    Audio.SetRequestedCommand(COMMAND_STOP);
+
+                    /* Turn off LCD */
+                    Display.OnOff(0);
+
+                    /* Log the power off event */
+                    Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
+                            "RioPlay powering down");
+
+                    /* Wait for power on again */
+                    for(unsigned long Key = 0; (Key != REMOTE_POWER) && 
+                            (Key != PANEL_POWER_UP); Key = GetKeycode());
+                    timer = time(NULL);
+
+                    /* Resume audio */
+                    /* Maybe make this a config option later? */
+                    /*Audio.SetRequestedCommand(COMMAND_PLAY);*/
+
+                    /* Turn on LCD */
+                    Display.OnOff(1);
+                    break;
+
+                case PANEL_POWER_DOWN:
+                    /* If user presses and holds the panel power button,
+                       exit the player app */
+                    timer = time(NULL);
+                    break;
+
+                case REMOTE_PLAY:
+                case PANEL_PLAY:
+                    /* Set command to play */
+                    if(Audio.GetActualCommand() == COMMAND_PLAY) {
+                        Audio.SetRequestedCommand(COMMAND_PAUSE);
+                    }
+                    else {
+                        Audio.SetRequestedCommand(COMMAND_PLAY);
+                    }
+                    break;
+
+                case REMOTE_VOL_UP:
+                case REMOTE_VOL_UP_REPEAT:
+                    Volume += 2;
+                    SetVolume();
+                    //printf("Remote: Volume is now %d\n", Volume);
+                    break;
+
+                case REMOTE_VOL_DOWN:
+                case REMOTE_VOL_DOWN_REPEAT:
+                    Volume -= 2;
+                    SetVolume();
+                    //printf("Remote: Volume is now %d\n", Volume);
+                    break;
+
+                case REMOTE_STOP:
+                case PANEL_STOP:
+                    Display.Backlight(0);
+                    /* Change requested command */
+                    Audio.SetRequestedCommand(COMMAND_STOP);
+                    break;
+
+                case REMOTE_FORWARD:
+                case PANEL_FORWARD:
+                    pthread_mutex_lock(&ClassMutex);
+                    if(PList) {
+                        PList->Advance();
+                    }
+                    pthread_mutex_unlock(&ClassMutex);
+
+                    /* Change requested command */
+                    Audio.SetRequestedCommand(COMMAND_CHANGESONG);
+                    break;
+
+                case REMOTE_REVERSE:
+                case PANEL_REVERSE:
+                    pthread_mutex_lock(&ClassMutex);
+                    if(PList) {
+                        PList->Reverse();
+                    }
+                    pthread_mutex_unlock(&ClassMutex);
+
+                    /* Change requested command */
+                    Audio.SetRequestedCommand(COMMAND_CHANGESONG);
+                    break;
+
+                case REMOTE_MENU:
+                case PANEL_MENU:
+                case REMOTE_DOWN:
+                case REMOTE_UP:
+                case REMOTE_DOWN_REPEAT:
+                case REMOTE_UP_REPEAT:
+                case REMOTE_ENTER:
+                case PANEL_WHEEL_CW:
+                case PANEL_WHEEL_CCW:
+                case PANEL_WHEEL_BUTTON:
+                    if(PlaylistMenuActive == 0) {
+                        MenuHandleKeypress(KeyCode);
+                    }
+                    if(PlaylistMenuActive != 0) {
+                        int TempVal = TempPList->CommandHandler(KeyCode,
+                                &ActiveMenu);
+                        if(TempVal == 0) {
+                            PlaylistMenuActive = 0;
+                            delete TempPList;
+                            TempPList = NULL;
                         }
-                        PList = TempPList;
-                        pthread_mutex_unlock(&ClassMutex);
-                        TempPList = NULL;
-                        Audio.SetRequestedCommand(COMMAND_CHANGESONG);
+                        else if(TempVal == 2) {
+                            PlaylistMenuActive = 0;
+                            pthread_mutex_lock(&ClassMutex);
+                            if(PList != NULL) {
+                                delete PList;
+                            }
+                            PList = TempPList;
+                            pthread_mutex_unlock(&ClassMutex);
+                            TempPList = NULL;
+                            Audio.SetRequestedCommand(COMMAND_CHANGESONG);
+                        }
                     }
-                }
-                break;
-                
-            default:
-                printf("Remote: Unhandled remote code 0x%08lx\n", KeyCode);
-                break;
+                    break;
+
+                default:
+                    Log::GetInstance()->Post(LOG_WARNING, __FILE__, __LINE__,
+                        "Unhandled remote code 0x%x", KeyCode);
+                    break;
+            }
         }
     }
 }
@@ -231,17 +259,30 @@ void RemoteThread::SetVolume() {
     
     VolOut = (VolOut & 0xff) | ((VolOut << 8) & 0xff00);
     if (ioctl(MixerFD, MIXER_WRITE(SOUND_MIXER_VOLUME), &VolOut) == -1) {
-        perror("Mixer");
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "ioctl() failed: %s", strerror(errno));
         return;
     }
 }
 
 unsigned long RemoteThread::GetKeycode(void) {
     unsigned long ReturnVal;
+    struct timeval Timeout;
+    fd_set ReadFDs;
+    
+    Timeout.tv_sec = 30;
+    Timeout.tv_usec = 0;
+    FD_SET(IrFD, &ReadFDs);
+    
+    /* Wait for 30 seconds for a keypress */
+    if(select(IrFD + 1, &ReadFDs, NULL, NULL, &Timeout) == 0) {
+        return 0;
+    }
     
     /* Read KeyCode from IR device */
     if(read(IrFD, (char *) &ReturnVal, 4) < 0) {
-        printf("Remote: Error reading from IR device\n");
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "Error reading from IR device");
         return 0;
     }
     
@@ -280,7 +321,7 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
         if(CurrentMenu == 0) {
             Volume += 2;
             SetVolume();
-            printf("Remote: Volume is now %d\n", Volume);
+            //printf("Remote: Volume is now %d\n", Volume);
         }
         else {
             ActiveMenu.Advance();
@@ -292,7 +333,7 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
         if(CurrentMenu == 0) {
             Volume -= 2;
             SetVolume();
-            printf("Remote: Volume is now %d\n", Volume);
+            //printf("Remote: Volume is now %d\n", Volume);
         }
         else {
             ActiveMenu.Advance();

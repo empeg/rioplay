@@ -17,12 +17,12 @@
 #include <pthread.h>
 #include "ShoutcastList.hh"
 #include "Playlist.hh"
-#include "Http.h"
 #include "Screen.hh"
 #include "Commands.h"
 #include "DisplayThread.hh"
 #include "MenuScreen.hh"
 #include "KeyCodes.h"
+#include "MemAlloc.hh"
 
 extern DisplayThread Display;
 
@@ -55,15 +55,15 @@ ShoutcastList::ShoutcastList(void) {
             
             /* Check to see if we need to expand the array */
             if((CurrentStream % 5) == 0) {
-                StreamNames = (char **) realloc(StreamNames,
+                StreamNames = (char **) __realloc(StreamNames,
                         sizeof(char *) * (CurrentStream + 5));
-                StreamUrls = (char ***) realloc(StreamUrls,
+                StreamUrls = (char ***) __realloc(StreamUrls,
                         sizeof(char **) * (CurrentStream + 5));
-                NumUrls = (int *) realloc(NumUrls,
+                NumUrls = (int *) __realloc(NumUrls,
                         sizeof(int) * (CurrentStream + 5));
             }
             /* Copy stream name */
-            StreamNames[CurrentStream] = (char *) malloc(sizeof(char) *
+            StreamNames[CurrentStream] = (char *) __malloc(sizeof(char) *
                     (strlen(TempString + 7) + 1));
             strcpy(StreamNames[CurrentStream], TempString + 7);
             StreamUrls[CurrentStream] = NULL;
@@ -73,11 +73,11 @@ ShoutcastList::ShoutcastList(void) {
         else {
             if((CurrentUrl % 5) == 0) {
                 StreamUrls[CurrentStream] =
-                        (char **) realloc(StreamUrls[CurrentStream],
+                        (char **) __realloc(StreamUrls[CurrentStream],
                         sizeof(char *) * (CurrentUrl + 5));
             }
             StreamUrls[CurrentStream][CurrentUrl] =
-                    (char *) malloc(sizeof(char) * (strlen(TempString) + 1));
+                    (char *) __malloc(sizeof(char) * (strlen(TempString) + 1));
             strcpy(StreamUrls[CurrentStream][CurrentUrl], TempString);
             if(StreamUrls[CurrentStream][CurrentUrl][strlen(TempString) - 1] == '\n') {
                 StreamUrls[CurrentStream][CurrentUrl][strlen(TempString) - 1] = '\0';
@@ -89,6 +89,16 @@ ShoutcastList::ShoutcastList(void) {
 }
 
 ShoutcastList::~ShoutcastList(void) {
+    for(int i = 0; i < NumEntries; i++) {
+        __free(StreamNames[i]);
+        for(int j = 0; j < NumUrls[i]; j++) {
+            __free(StreamUrls[i][j]);
+        }
+        __free(StreamUrls[i]);
+    }
+    __free(StreamNames);
+    __free(StreamUrls);
+    __free(NumUrls);
 }
 
 Tag ShoutcastList::GetTag(int EntryNumber) {

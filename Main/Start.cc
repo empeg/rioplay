@@ -18,12 +18,15 @@
 #include "DisplayThread.hh"
 #include "AudioThread.hh"
 #include "RemoteThread.hh"
-#include "WebMain.h"
+#include "WebThread.hh"
+#include "Log.hh"
 
 /* Be sure to have Display declared first */
 DisplayThread Display;
 RemoteThread Remote;
 AudioThread Audio;
+WebThread Web;
+Log DummyLog;
 
 void *ThreadJump(void *arg) {
     Thread *T;
@@ -53,7 +56,7 @@ int main() {
     pthread_create(&ThreadHandle[2], NULL, ThreadJump, &Remote);
     
     /* Create Web Interface thread */
-    pthread_create(&ThreadHandle[3], NULL, WebMain, NULL);
+    pthread_create(&ThreadHandle[3], NULL, ThreadJump, &Web);
     
     /* Wait for Audio thread to exit */
     pthread_join(ThreadHandle[0], NULL);

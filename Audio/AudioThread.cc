@@ -18,22 +18,29 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
+#include <errno.h>
 #include "AudioThread.hh"
 #include "MadCallbacks.hh"
 #include "Commands.h"
 #include "Tag.h"
 #include "Playlist.hh"
-#include "Http.h"
+#include "Http.hh"
 #include "Player.h"
 #include "DisplayThread.hh"
 #include "RemoteThread.hh"
+#include "Log.hh"
+#include "StatusScreen.hh"
+#include "BufferClass.hh"
+#include "MemAlloc.hh"
+
+extern int errno;
 
 extern DisplayThread Display;
 extern RemoteThread Remote;
 
 AudioThread::AudioThread(void) {
     /* Initialize class variables */
-    SongFP = NULL;
+    SongFD = -1;
     AudioFD = -1;
     CurrentTime.seconds = 0;
     CurrentTime.fraction = 0;
@@ -42,6 +49,11 @@ AudioThread::AudioThread(void) {
     MetadataFrequency = 0;
     FirstRun = 0;
     LocalBuffer = NULL;
+    BufferSize = BUFFER_SIZE;
+    ExtBuffer = NULL;
+    Mp3SampleRate = 44100;
+    
+    Buffer = (unsigned char *) __malloc(BufferSize);
     
     /* Initialize mutexes and condition variables */
     pthread_mutex_init(&ClassMutex, NULL);
@@ -50,7 +62,8 @@ AudioThread::AudioThread(void) {
     /* Open the audio device for output */
     AudioFD = open("/dev/audio", O_WRONLY);
     if (AudioFD < 0) {
-        printf("Audio: Cannot open audio device\n");
+        Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                "Cannot open audio device");
         return;
     } 
 
@@ -60,12 +73,18 @@ AudioThread::AudioThread(void) {
 }    
 
 AudioThread::~AudioThread(void) {
+    __free(Buffer);
+    
+    if(LocalBuffer != NULL) {
+        __free(LocalBuffer);
+    }
 }
 
 void *AudioThread::ThreadMain(void *arg) {
     char Filename[256];
     Tag TrackTag;
     Playlist *PList;
+    HttpConnection *Http;
     
     while(1) {
         if(GetRequestedCommand() == COMMAND_STOP) {
@@ -93,13 +112,15 @@ void *AudioThread::ThreadMain(void *arg) {
     
                 /* Get Filename */
                 if((PList = Remote.GetPlaylist()) == NULL) {
-                    printf("Audio: No playlist selected\n");
+                    Log::GetInstance()->Post(LOG_WARNING, __FILE__, __LINE__,
+                            "Audio: No playlist selected");
                     SetRequestedCommand(COMMAND_STOP);
                     break;
                 }
                 
                 if(PList->GetFilename(Filename, PList->GetPosition()) == NULL) {
-                    printf("Audio: Nothing in playlist\n");
+                    Log::GetInstance()->Post(LOG_WARNING, __FILE__, __LINE__,
+                            "Audio: Nothing in playlist");
                     SetRequestedCommand(COMMAND_STOP);
                     break;
                 }
@@ -107,16 +128,30 @@ void *AudioThread::ThreadMain(void *arg) {
                 /* Get track info */
                 TrackTag = PList->GetTag(PList->GetPosition());
 
-                //printf("Audio: Currently playing:\n");
-                //printf("  Title:  %s\n", TrackTag.Title);
-                //printf("  Artist: %s\n", TrackTag.Artist);
-                //printf("  Album:  %s\n", TrackTag.Album);
+                Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
+                        "Playing Title: %s Artist: %s Album: %s",
+                        TrackTag.Title, TrackTag.Artist, TrackTag.Album);
                 Status.SetAttribs(TrackTag);
                 Display.Update(&Status);
 
                 /* Open MP3 File */
-                SongFP = OpenFile(Filename);
+                Http = OpenFile(Filename);
+                if((SongFD = Http->GetDescriptor()) < 0) {
+                    /* Invalid file */
+                    Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                            "Could not open file %s", Filename);
+                    
+                    SetRequestedCommand(COMMAND_STOP);
+                    break;
+                }
 
+                /* Set up external buffer thread */
+                ExtBuffer = new BufferClass(SongFD, 81920);
+                if(MetadataFrequency > 0) {
+                    /* Fill the buffer before we start playback */
+                    ExtBuffer->Prebuffer();
+                }
+                
                 /* Set time to 0 */
                 CurrentTime.seconds = 0;
                 CurrentTime.fraction = 0;
@@ -124,7 +159,7 @@ void *AudioThread::ThreadMain(void *arg) {
                 /* Prepare input function */
                 FirstRun = 0;
                 if(LocalBuffer != NULL) {
-                    free(LocalBuffer);
+                    __free(LocalBuffer);
                     LocalBuffer = NULL;
                 }
                 
@@ -132,8 +167,12 @@ void *AudioThread::ThreadMain(void *arg) {
 
                 mad_decoder_finish(&MadDecoder);
 
+                Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
+                        "Decoder finished");
+                
                 /* Close Audio file */
-                fclose(SongFP);
+                delete ExtBuffer;
+                delete Http;
                 
                 /* Advance playlist */
                 if(GetRequestedCommand() == COMMAND_PLAY) {
@@ -143,6 +182,10 @@ void *AudioThread::ThreadMain(void *arg) {
                        that case */
                     PList->Advance();
                 }
+                else if(GetRequestedCommand() == COMMAND_STOP) {
+                    Status.SetTime(0, 0);
+                    Display.Update(&Status);
+                }
                 
                 break;
                 
@@ -151,7 +194,8 @@ void *AudioThread::ThreadMain(void *arg) {
                 break;
                 
             default:
-                printf("Audio: Unknown command received\n");
+                Log::GetInstance()->Post(LOG_WARNING, __FILE__, __LINE__,
+                    "Unknown command received");
                 break;
         }
     }
@@ -194,39 +238,39 @@ void AudioThread::SetActualCommand(int Command) {
     pthread_mutex_unlock(&ClassMutex);
 }
     
-FILE *AudioThread::OpenFile(char *Filename) {
-    FILE *fp;
-    char Host[64];
-    char Path[128];
-    unsigned short Port;
-    char TempString[128];
+HttpConnection *AudioThread::OpenFile(char *Filename) {
+    int fd;
+    HttpConnection *Http = NULL;
     
     if(strstr(Filename, "http://") != NULL) {
         /* Found web file/stream */
         
-        /* Parse URL */
-        HttpParseUrl(Filename, Host, &Port, Path);
-
-        /* Open a connection to the Rio HTTP Server */    
-        fp = HttpConnect(Host, Port);
+        Http = new HttpConnection(Filename);
         
-        /* Send HTTP request */
-        sprintf(TempString,
-                "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: RioPlay/%s\r\nicy-metadata:1\r\n\r\n",
-                Path, Host, PLAYER_VER);
-        fwrite(TempString, 1, strlen(TempString), fp);
+        /* Open a connection to the Rio HTTP Server */    
+        fd = Http->Connect();
+        if(fd < 0) {
+            Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                    "Couldn't connect to URL %s", Filename);
+            return NULL;
+        }
         
         /* Find end of HTTP Header */
-        MetadataFrequency = HttpSkipHeader(fp);
+        MetadataFrequency = Http->SkipHeader();
     
         /* Socket fd is now waiting with MP3 data on it */
     }
     else {
         /* Regular file */
-        fp = fopen(Filename, "r");
+        fd = open(Filename, O_RDONLY);
+        if(fd < 0) {
+            Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
+                    "open() failed: %s", strerror(errno));
+            return NULL;
+        }
     }
     
-    return fp;
+    return Http;
 }
 
 enum mad_flow AudioThread::InputCallback(void *ptr, struct mad_stream *stream) {
@@ -250,70 +294,81 @@ enum mad_flow AudioThread::InputCallback(void *ptr, struct mad_stream *stream) {
     }
 
     if(MetadataFrequency > 0) {
-        while(BUFFER_SIZE - (LeftoverBytes + RetVal) > MetadataFrequency) {
-            /* Shoutcast metadata is embedded in the stream */
-            if(LocalBuffer == NULL) {
-                LocalBuffer = (char *) malloc(MetadataFrequency + 4096);
-            }
-            
-            /* Read in the number of bytes equal to the frequency of the
-               metadata updates */
-            for(BytesRead = 0; BytesRead < MetadataFrequency; ) {
-                Temp = fread(LocalBuffer + BytesRead, 1,
-                    MetadataFrequency - BytesRead, SongFP);
-                if(Temp < 0) {
-                    perror("Audio: read"); 
-                    return MAD_FLOW_STOP;
-                }
-                BytesRead += Temp;
-            }
-            
-            /* Copy good audio to audio buffer */
-            memcpy(Buffer + LeftoverBytes + RetVal, LocalBuffer,
-                    BytesRead);
-            RetVal += BytesRead;
+        /* Shoutcast metadata is embedded in the stream */
+        if(LocalBuffer == NULL) {
+            LocalBuffer = (char *) __malloc(MetadataFrequency + 4096);
+        }
+        if((MetadataFrequency * 2) > BufferSize) {
+            Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
+                    "Resizing buffer");
+            BufferSize = (MetadataFrequency * 2);
+            Buffer = (unsigned char *) __realloc(Buffer, BufferSize);
+        }
 
-            /* Read the metadata length */
-            while(fread(LocalBuffer, 1, 1, SongFP) != 1);
-            MetadataLength = ((unsigned char) LocalBuffer[0]) * 16;
-
-            /* Read the metadata */
-            for(BytesRead = 0; BytesRead != MetadataLength; ) {
-                Temp = fread(LocalBuffer + BytesRead, 1,
-                    MetadataLength - BytesRead, SongFP);
-                if(Temp < 0) {
-                    perror("Audio: read"); 
-                    return MAD_FLOW_STOP;
-                }
-                BytesRead += Temp;
+        /* Read in the number of bytes equal to the frequency of the
+           metadata updates */
+        for(BytesRead = 0; BytesRead < MetadataFrequency; ) {
+            Temp = ExtBuffer->ReadNB(LocalBuffer + BytesRead,
+                MetadataFrequency - BytesRead);
+            if(Temp < 0) {
+                Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                        "read() failed: %s", strerror(errno));
+                return MAD_FLOW_STOP;
             }
-                    
+            BytesRead += Temp;
+        }
 
-            /* Print the metadata */
-            if(MetadataLength) {
-                //printf("Audio: Metadata: ");
-                //for(int i = 0; i < MetadataLength; i++) {
-                //    printf("%c", LocalBuffer[i]);
-                //}
-                //printf("\n");
-                
-                if((PList = Remote.GetPlaylist()) == NULL) {
-                    return MAD_FLOW_STOP;
-                }
-                PList->SetMetadata(LocalBuffer, MetadataLength);
-                TrackTag = PList->GetTag(PList->GetPosition());
-                Status.SetAttribs(TrackTag);
-                Display.Update(&Status);
+        /* Copy good audio to audio buffer */
+        memcpy(Buffer + LeftoverBytes + RetVal, LocalBuffer,
+                BytesRead);
+        RetVal += BytesRead;
+
+        /* Read the metadata length */
+        for(Temp = 0; (Temp >= 0) && (Temp != 1);
+                Temp = ExtBuffer->ReadNB(LocalBuffer, 1));
+        if(Temp < 0) {
+            Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                    "read() failed: %s", strerror(errno));
+            return MAD_FLOW_STOP;
+        }
+        MetadataLength = ((unsigned char) LocalBuffer[0]) * 16;
+
+        /* Read the metadata */
+        for(BytesRead = 0; BytesRead != MetadataLength; ) {
+            Temp = ExtBuffer->ReadNB(LocalBuffer + BytesRead,
+                MetadataLength - BytesRead);
+            if(Temp < 0) {
+                Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                        "read() failed: %s", strerror(errno));
+                return MAD_FLOW_STOP;
             }
-        }    
+            BytesRead += Temp;
+        }
+
+        /* Print the metadata */
+        if(MetadataLength) {
+            //printf("Audio: Metadata: ");
+            //for(int i = 0; i < MetadataLength; i++) {
+            //    printf("%c", LocalBuffer[i]);
+            //}
+            //printf("\n");
+
+            if((PList = Remote.GetPlaylist()) == NULL) {
+                return MAD_FLOW_STOP;
+            }
+            PList->SetMetadata(LocalBuffer, MetadataLength);
+            TrackTag = PList->GetTag(PList->GetPosition());
+            Status.SetAttribs(TrackTag);
+            Display.Update(&Status);
+        }
     }
     else {
         /* No metadata, read as normal */
-        RetVal = fread(Buffer + LeftoverBytes, 1,
-                BUFFER_SIZE - LeftoverBytes, SongFP);
-        if(RetVal <= 0) {
-            perror("Read");
-            /* Finished reading file - clean up here? */
+        RetVal = ExtBuffer->ReadNB(Buffer + LeftoverBytes,
+                BufferSize - LeftoverBytes);
+        if(RetVal < 0) {
+            Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                    "read() failed: %s (bytes: %d)", strerror(errno), RetVal);
             return MAD_FLOW_STOP;
         }
     }
@@ -329,14 +384,43 @@ enum mad_flow AudioThread::OutputCallback(void *ptr,
         struct mad_header const *header, struct mad_pcm *pcm) {
     signed int LeftSample, RightSample;
     static char DecodedSample[4608];
+    mad_fixed_t *Resampled[2] = {NULL, NULL};
     static int SamplePos = 0;
     static int LastTime = 0;
     int i;
     enum mad_flow ReturnVal = MAD_FLOW_CONTINUE;
+    int NumSamples;
+    mad_fixed_t *Samples[2];
 
-    for (i = 0; i < pcm->length; i++) {
-        LeftSample = ScaleSample(pcm->samples[0][i]);
-        RightSample = ScaleSample(pcm->samples[1][i]);
+    if(Mp3SampleRate != pcm->samplerate) {
+        Mp3SampleRate = pcm->samplerate;
+        ResampleInit(Mp3SampleRate);
+    }
+    
+    if(Mp3SampleRate != 44100) {
+        /* Allocate space for resampled samples */
+        Resampled[0] = (mad_fixed_t *) 
+                __malloc(sizeof(mad_fixed_t) * pcm->length * 8);
+        Resampled[1] = (mad_fixed_t *) 
+                __malloc(sizeof(mad_fixed_t) * pcm->length * 8);
+        NumSamples = ResampleBlock(pcm->length, pcm->samples[0], Resampled[0]);
+        ResampleBlock(pcm->length, pcm->samples[1], Resampled[1]);
+        Samples[0] = Resampled[0];
+        Samples[1] = Resampled[1];
+    }
+    else {
+        Samples[0] = pcm->samples[0];
+        Samples[1] = pcm->samples[1];
+        NumSamples = pcm->length;
+    }
+    
+    if(pcm->channels == 1) {
+        Samples[1] = Samples[0];
+    }
+    
+    for (i = 0; i < NumSamples; i++) {
+        LeftSample = ScaleSample(Samples[0][i]);
+        RightSample = ScaleSample(Samples[1][i]);
 
         DecodedSample[SamplePos++] = LeftSample & 0xff;
         DecodedSample[SamplePos++] = (LeftSample >> 8) & 0xff;
@@ -383,14 +467,90 @@ enum mad_flow AudioThread::OutputCallback(void *ptr,
         }
     }
 
+    if(Resampled[0] != NULL) {
+        __free(Resampled[0]);
+        __free(Resampled[1]);
+    }
+    
     return ReturnVal;
 }
 
 enum mad_flow AudioThread::ErrorCallback(void *ptr, struct mad_stream *stream,
         struct mad_frame *frame) {
-    printf("Audio: Decoding error %d - %s\n", stream->error, mad_stream_errorstr(stream));
-    fflush(stdout);
+    Log::GetInstance()->Post(LOG_WARNING, __FILE__, __LINE__,
+            "Decoding error %d - %s", stream->error,
+            mad_stream_errorstr(stream));
 
     return MAD_FLOW_CONTINUE;
 }
+
+unsigned int AudioThread::ResampleBlock(unsigned int NumSamples,
+        mad_fixed_t const *OrigSamples, mad_fixed_t *NewSamples) {
+    /* This function was copied from resample.c in the MAD distribution */
+    /* This resampling algorithm is based on a linear interpolation, which is
+       not at all the best sounding but is relatively fast and efficient.
+      
+       A better algorithm would be one that implements a bandlimited
+       interpolation. */
+
+    mad_fixed_t const *End, *Begin;
+
+    if(State.ratio == MAD_F_ONE) {
+        memcpy(NewSamples, OrigSamples, NumSamples * sizeof(mad_fixed_t));
+        return NumSamples;
+    }
+
+    End = OrigSamples + NumSamples;
+    Begin = NewSamples;
+
+    if(State.step < 0) {
+        State.step = mad_f_fracpart(-State.step);
+
+        while(State.step < MAD_F_ONE) {
+            if(State.step != 0) {
+                *NewSamples++ = State.last +
+                        mad_f_mul(*OrigSamples - State.last, State.step);
+            }
+            else {
+                *NewSamples++ = State.last;
+            }
+
+            State.step += State.ratio;
+            if (((State.step + 0x00000080L) & 0x0fffff00L) == 0) {
+                State.step = (State.step + 0x00000080L) & ~0x0fffffffL;
+            }
+        }
+
+        State.step -= MAD_F_ONE;
+    }
+
+    while(End - OrigSamples > 1 + mad_f_intpart(State.step)) {
+        OrigSamples += mad_f_intpart(State.step);
+        State.step = mad_f_fracpart(State.step);
+
+        if(State.step != 0) {
+            *NewSamples++ = *OrigSamples +
+                    mad_f_mul(OrigSamples[1] - OrigSamples[0], State.step);
+        }
+        else {
+            *NewSamples++ = *OrigSamples;
+        }
+
+        State.step += State.ratio;
+        if (((State.step + 0x00000080L) & 0x0fffff00L) == 0) {
+            State.step = (State.step + 0x00000080L) & ~0x0fffffffL;
+        }
+    }
+
+    if(End - OrigSamples == 1 + mad_f_intpart(State.step)) {
+        State.last = End[-1];
+        State.step = -State.step;
+    }
+    else {
+        State.step -= mad_f_fromint(End - OrigSamples);
+    }
+
+    return NewSamples - Begin;
+}
+    
 

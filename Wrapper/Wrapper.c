@@ -19,7 +19,9 @@
 
 int main(void) {
     int ReturnVal;
-    
+
+    system("mount /proc");
+        
     while(1) {
         ReturnVal = WEXITSTATUS(system("/bin/rioplay"));
         

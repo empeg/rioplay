@@ -1,3 +1,13 @@
+Version 0.28 (07/18/02)
+    - Player now comes out of pseudo power down mode in STOP mode instead
+      of PLAY mode
+    - Support for sample rates of other than 44.1kHz and for mono mode
+    - Added a logging mechanism which can be accessed by a web browser
+      pointed at the Rio's IP address
+    - Added separate input buffer thread which should eliminate the breaks
+      in playback of streaming audio
+    - Display backlight now powers off after 30 seconds without a keypress
+
 Version 0.24 (07/11/02)
     - Knob on front panel now is used to scroll up and down in menus
     - streams.cfg supported in both Unix and DOS text file formats
