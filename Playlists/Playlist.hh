@@ -27,6 +27,7 @@
 #define COMMAND_REVERSE          4
 #define COMMAND_DECODER_FINISHED 5
 #define COMMAND_CLEAR            6
+#define COMMAND_PAUSE		 7
 
 class PlaylistClass;
 
@@ -63,6 +64,7 @@ public:
     
     void Enqueue(InputSource *Source, unsigned int SourceID, const string &Title);
     void Play(void);
+    void Pause(void);
     void DecoderFinished(void);
     void Stop(bool Block = false);
     void Forward(void);

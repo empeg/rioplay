@@ -57,10 +57,17 @@ void *PlaylistClass::ThreadMain(void *arg) {
                 }
                 else {
                     /* We're already playing something so just ignore this
-                       command */
+                       command -- or unpause the transport */
+		    CurrentlyPlayingEntry.Source->SetPause(0);
                 }
                 break;
-                
+ 
+	    case COMMAND_PAUSE:
+	        if(CurrentlyPlayingEntry.Source != NULL) {
+		    CurrentlyPlayingEntry.Source->SetPause(1);
+	        }
+    		break;		
+               
             case COMMAND_STOP:
                 if(CurrentlyPlayingEntry.Source != NULL) {
                     /* Stop playing the current song */
@@ -229,6 +236,10 @@ void PlaylistClass::RequestCommand(int RequestedCommand, bool Block = false) {
 
 void PlaylistClass::Play(void) {
     RequestCommand(COMMAND_PLAY);
+}
+
+void PlaylistClass::Pause(void) {
+    RequestCommand(COMMAND_PAUSE);
 }
 
 void PlaylistClass::DecoderFinished(void) {
