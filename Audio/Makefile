@@ -1,10 +1,5 @@
-LIBMAD = ../../mad-0.14.2b/libmad/.libs/libmad.a
+Audio.o: AudioOutputDevice.o
+	$(LD) -r -o Audio.o AudioOutputDevice.o
 
-Audio.o: AudioThread.o MadCallbacks.o
-	ld -r -o Audio.o AudioThread.o MadCallbacks.o $(LIBMAD)
-
-AudioThread.o: AudioThread.cc AudioThread.hh mad.h MadCallbacks.hh
-	$(C++) -c -o AudioThread.o $(CFLAGS) AudioThread.cc $(INCLUDEDIRS)
-
-MadCallbacks.o: MadCallbacks.cc MadCallbacks.hh mad.h
-	$(C++) -c -o MadCallbacks.o $(CFLAGS) MadCallbacks.cc $(INCLUDEDIRS)
+AudioOutputDevice.o: AudioOutputDevice.cc AudioOutputDevice.hh
+	$(C++) -c -o AudioOutputDevice.o $(CFLAGS) AudioOutputDevice.cc $(INCLUDEDIRS)

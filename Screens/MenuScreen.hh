@@ -22,7 +22,7 @@ public:
     ~MenuScreen(void);
     virtual void Update(char *Display);
     void SetTitle(char *NewTitle);
-    void AddOption(char *NewOption);
+    void AddOption(const char *NewOption);
     void ClearOptions(void);
     int GetSelection(void);
     void Advance(void);

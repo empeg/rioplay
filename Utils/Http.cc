@@ -19,6 +19,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <errno.h>
+#include <string>
 #include "Http.hh"
 #include "Log.hh"
 #include "Player.h"
@@ -52,8 +53,10 @@ HttpConnection::~HttpConnection(void) {
 
 int HttpConnection::Connect(void) {
     struct sockaddr_in ServAddr;
-    struct hostent *HostEntry;
+    struct hostent HostEntry, *HEReturn;
     char TempString[256];
+    char HostBuffer[512];
+    int HostError;
     
     bzero((char *) &ServAddr, sizeof(ServAddr));
     ServAddr.sin_family = AF_INET;
@@ -65,13 +68,13 @@ int HttpConnection::Connect(void) {
     }
     
     /* Do DNS lookup */
-    if((HostEntry = gethostbyname(Host))) {
+    if(gethostbyname_r(Host, &HostEntry, HostBuffer, 512, &HEReturn, &HostError) == 0) {
         ServAddr.sin_addr.s_addr = 
-                ((struct in_addr *)(HostEntry->h_addr))->s_addr;
+                ((struct in_addr *)(HostEntry.h_addr))->s_addr;
     }
     else {
         Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
-                "gethostbyname() failed on host %s", Host);
+                "gethostbyname_r() failed on host %s", Host);
         return -1;
     }
 
@@ -86,6 +89,7 @@ int HttpConnection::Connect(void) {
     if(connect(Descriptor, (struct sockaddr *) &ServAddr, sizeof(ServAddr)) < 0) {
         Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
                 "connect() failed: %s", strerror(errno));
+        fflush(stdout);
         return -1;
     }
 
@@ -159,26 +163,13 @@ int HttpConnection::SkipHeader(void) {
     return ReturnVal;
 }
 
-char *HttpConnection::UrlEncode(char **string) {
-    char Temp[256];
-    unsigned int Orig, New;
-
-    for(Orig = 0, New = 0; Orig < (strlen(*string) + 1); Orig++) {
-         if((*string)[Orig] != ' ') {
-             Temp[New] = (*string)[Orig];
-             New++;
-         }
-         else {
-             sprintf(&(Temp[New]), "%%20");
-             New += 3;
-         }
-    }
-
-    *string = (char *) __realloc(*string, (sizeof(char) * (strlen(Temp) + 1)));
+void HttpConnection::UrlEncode(string &Str) {
+    string::size_type Pos;
+    string HttpSpace("%%20");
     
-    strcpy(*string, Temp);
-   
-    return *string;
+    while((Pos = Str.find(" ", 0)) != string::npos) {
+        Str.replace(Pos, 1, HttpSpace);
+    }
 }
 
 int HttpConnection::GetString(char *buf, int bufsize) {

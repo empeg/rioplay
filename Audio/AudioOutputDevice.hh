@@ -10,16 +10,10 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-#ifndef AUDIOTHREAD_HH
-#define AUDIOTHREAD_HH
+#ifndef AUDIOOUTPUTDEVICE_HH
+#define AUDIOOUTPUTDEVICE_HH
 
-#include <stdio.h>
-#include "mad.h"
-#include "Thread.hh"
-#include "Http.hh"
-#include "StatusScreen.hh"
-
-#define BUFFER_SIZE 16384
+#include "libmad/mad.h"
 
 struct ResampleState {
     mad_fixed_t ratio;
@@ -39,65 +33,59 @@ static mad_fixed_t const ResampleTable[9] = {
     /*  8000 */ MAD_F(0x02e709de) /* 0.181405896 */
 };
 
-class BufferClass;
-
-class AudioThread : public Thread {
+class AudioOutputDevice {
 public:
-    AudioThread(void);
-    ~AudioThread(void);
-    virtual void *ThreadMain(void *arg);
-    void SetRequestedCommand(int Command);
-    int GetActualCommand(void);
-    enum mad_flow InputCallback(void *ptr, struct mad_stream *stream);
-    enum mad_flow OutputCallback(void *ptr, struct mad_header const *header, struct mad_pcm *pcm);
-    enum mad_flow ErrorCallback(void *ptr, struct mad_stream *stream, struct mad_frame *frame);
+    AudioOutputDevice(void);
+    ~AudioOutputDevice(void);
+    void SetSampleRate(unsigned int newRate);
+    void SetBitsPerSample(int inBitsPerSample);
+    void Play(const mad_fixed_t *Left, const mad_fixed_t *Right,
+            unsigned int NumSamples);
     
-private:
-    int GetRequestedCommand(void);
-    void SetActualCommand(int Command);
-    HttpConnection *OpenFile(char *Filename);
+protected:
     signed int ScaleSample(mad_fixed_t Sample);
     int ResampleRateIndex(unsigned int Rate);
-    int ResampleInit(unsigned int OrigRate);
+    int ResampleInit();
     unsigned int ResampleBlock(unsigned int NumSamples,
             mad_fixed_t const *OrigSamples, mad_fixed_t *NewSamples);
-    unsigned char *Buffer;
-    int SongFD; /* File descriptor for song file */
-    int AudioFD; /* File descriptor for audio output device */
-    mad_timer_t CurrentTime;
-    StatusScreen Status;
-    struct mad_decoder MadDecoder;
-    int CommandRequested;
-    int CommandActual;
-    int MetadataFrequency;
-    int FirstRun;
-    char *LocalBuffer;
-    int BufferSize;
-    BufferClass *ExtBuffer;
+    int AudioFD;
+    unsigned int InSampleRate;
     ResampleState State;
-    unsigned int Mp3SampleRate;
-    
+    char OutputBuffer[4608];
+    int BitsPerSample;
 };
 
-inline signed int AudioThread::ScaleSample(mad_fixed_t Sample) {
-    /* This function is basically the audio_linear_round() function
-       from the MAD distribution without the fancy clipping */
-    /* Round */
-    Sample += (1L << (MAD_F_FRACBITS - 16));
-
-    /* Clip */
-    if(Sample >= MAD_F_ONE) {
-        Sample = MAD_F_ONE - 1;
+inline void AudioOutputDevice::SetSampleRate(unsigned int newRate) {
+    if(newRate != InSampleRate) {
+        InSampleRate = newRate;
+        ResampleInit();
     }
-    else if(Sample < -MAD_F_ONE) {
-        Sample = -MAD_F_ONE;
-    }
-
-    /* Quantize */
-    return Sample >> (MAD_F_FRACBITS + 1 - 16);
 }
 
-inline int AudioThread::ResampleRateIndex(unsigned int Rate) {
+inline signed int AudioOutputDevice::ScaleSample(mad_fixed_t Sample) {
+    /* This function is basically the audio_linear_round() function
+       from the MAD distribution without the fancy clipping */
+    if(BitsPerSample > 16) {
+        /* Round */
+        Sample += (1L << (BitsPerSample - 16));
+
+        /* Clip */
+        if(Sample >= MAD_F_ONE) {
+            Sample = MAD_F_ONE - 1;
+        }
+        else if(Sample < -MAD_F_ONE) {
+            Sample = -MAD_F_ONE;
+        }
+
+        /* Quantize */
+        return Sample >> (BitsPerSample + 1 - 16);
+    }
+    else {
+        return Sample;
+    }
+}
+
+inline int AudioOutputDevice::ResampleRateIndex(unsigned int Rate) {
   switch(Rate) {
       case 48000: return 0;
       case 44100: return 1;
@@ -113,10 +101,10 @@ inline int AudioThread::ResampleRateIndex(unsigned int Rate) {
   return -1;
 }    
 
-inline int AudioThread::ResampleInit(unsigned int OrigRate) {
+inline int AudioOutputDevice::ResampleInit(void) {
     int RateIndex;
 
-    RateIndex = ResampleRateIndex(OrigRate);
+    RateIndex = ResampleRateIndex(InSampleRate);
 
     if(RateIndex == -1) {
       return -1;
@@ -130,4 +118,4 @@ inline int AudioThread::ResampleInit(unsigned int OrigRate) {
     return 0;
 }
 
-#endif /* #ifndef AUDIOTHREAD_HH */
+#endif

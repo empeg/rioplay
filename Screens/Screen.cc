@@ -14,6 +14,7 @@
 #include <string.h>
 #include "Screen.hh"
 #include "LetterBitmaps.h"
+#include "MemAlloc.hh"
 
 Screen::Screen(void) {
 }

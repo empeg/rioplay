@@ -11,13 +11,14 @@
 // GNU General Public License for more details.
 
 #include <stdio.h>
+#define DONT_DEFINE_NEW
 #include "MemAlloc.hh"
 
 MemAlloc *MemAlloc::Instance = NULL;
 
-MemAlloc Dummymalloc;
-
 MemAlloc::MemAlloc(void) {
+    pthread_mutex_init(&ClassMutex, NULL);
+    
     for(int i = 0; i < MemAllocTableSize; i++) {
         Addr[i] = NULL;
         Size[i] = 0;
@@ -29,12 +30,14 @@ MemAlloc::MemAlloc(void) {
 }
 
 MemAlloc::~MemAlloc(void) {
+    printf("### Checking for unfreed memory...\n");
     for(int i = 0; i < MemAllocTableSize; i++) {
         if(Size[i] != 0) {
             printf("--- Memory not freed\n");
-            printf("Allocated at: %s, line %d\n", Filename[i].c_str(), Line[i]);
+            printf("    Allocated at: %s, line %d\n", Filename[i].c_str(), Line[i]);
         }
     }
+    printf("### Done.\n");
 }
 
 MemAlloc *MemAlloc::GetInstance(void) {
@@ -43,6 +46,8 @@ MemAlloc *MemAlloc::GetInstance(void) {
 
 void *MemAlloc::Malloc(size_t size, char *FromFile, int FromLine) {
     void *Temp;
+    
+    pthread_mutex_lock(&ClassMutex);
     
     Addr[Index] = malloc(size + 4);
     Size[Index] = size;
@@ -59,6 +64,8 @@ void *MemAlloc::Malloc(size_t size, char *FromFile, int FromLine) {
         Index = 0;
     }
     
+    pthread_mutex_unlock(&ClassMutex);
+    
     return Temp;
 }
 
@@ -66,6 +73,10 @@ void *MemAlloc::Realloc(void *ptr, size_t size, char *FromFile, int FromLine) {
     if(ptr == NULL) {
         return Malloc(size, FromFile, FromLine);
     }
+    
+    void *ReturnVal = NULL;
+    
+    pthread_mutex_lock(&ClassMutex);
     
     for(int i = 0; i < MemAllocTableSize; i++) {
         if((Addr[i] == ptr) && (Size[i] > 0)) {
@@ -88,16 +99,25 @@ void *MemAlloc::Realloc(void *ptr, size_t size, char *FromFile, int FromLine) {
            ((char *) Addr[i])[size + 2] = 0xbe;
            ((char *) Addr[i])[size + 3] = 0xef;
             
-            return Addr[i];
+            ReturnVal = Addr[i];
         }
     }
     
-    printf("--- Realloc couldn't find old ptr!  File %s Line %d\n", FromFile, FromLine);
+    if(ReturnVal == NULL) {
+        printf("--- Realloc couldn't find old ptr!  File %s Line %d\n", FromFile, FromLine);
+    }
     
-    return NULL;
+    pthread_mutex_unlock(&ClassMutex);
+    
+    return ReturnVal;
 }
 
 void MemAlloc::Free(void *ptr, char *FromFile, int FromLine) {
+    
+    bool Found = false;
+    
+    pthread_mutex_lock(&ClassMutex);
+    
     for(int i = 0; i < MemAllocTableSize; i++) {
         if((Addr[i] == ptr) && (Size[i] > 0)) {
             if(  (((char *) Addr[i])[Size[i]] != 0xde) ||
@@ -105,6 +125,7 @@ void MemAlloc::Free(void *ptr, char *FromFile, int FromLine) {
                  (((char *) Addr[i])[Size[i] + 2] != 0xbe) ||
                  (((char *) Addr[i])[Size[i] + 3] != 0xef) ) {
                 printf("---Overwrote end of buffer!  Freed at %s, line %d\n", FromFile, FromLine);
+                printf("   Alloced at %s, line %d\n", Filename[i].c_str(), Line[i]);
                 printf("   Key = 0x%02x%02x%02x%02x\n", ((char *) Addr[i])[Size[i]],
                         ((char *) Addr[i])[Size[i] + 1], ((char *) Addr[i])[Size[i] + 2],
                         ((char *) Addr[i])[Size[i] + 3]);
@@ -113,9 +134,39 @@ void MemAlloc::Free(void *ptr, char *FromFile, int FromLine) {
             Filename[i] = string(FromFile);
             Line[i] = FromLine;
             free(ptr);
-            return;
+            Found = true;
         }
     }
     
-    printf("Freeing invalid ptr! File %s Line %d\n", FromFile, FromLine);
+    pthread_mutex_unlock(&ClassMutex);
+    
+    if(Found == false) {
+        printf("---Freeing invalid ptr! File %s Line %d\n", FromFile, FromLine);
+    }
 }
+
+#ifdef ALLOC_DEBUG
+void *operator new(size_t size) {
+    return MemAlloc::GetInstance()->Malloc(size, __FILE__, __LINE__);
+}
+
+void *operator new[](size_t size) {
+    return MemAlloc::GetInstance()->Malloc(size, __FILE__, __LINE__);
+}
+
+void *operator new(size_t size, char *file, int line) {
+    return MemAlloc::GetInstance()->Malloc(size, file, line);
+}
+
+void *operator new[](size_t size, char *file, int line) {
+    return MemAlloc::GetInstance()->Malloc(size, file, line);
+}
+
+void operator delete(void *ptr) {
+    MemAlloc::GetInstance()->Free(ptr, __FILE__, __LINE__);
+}
+
+void operator delete[](void *ptr) {
+    MemAlloc::GetInstance()->Free(ptr, __FILE__, __LINE__);
+}
+#endif

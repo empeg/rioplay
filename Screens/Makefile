@@ -1,8 +1,8 @@
 Screens.o: Screen.o StatusScreen.o LogoScreen.o MenuScreen.o
-	ld -r -o Screens.o Screen.o StatusScreen.o LogoScreen.o MenuScreen.o
+	$(LD) -r -o Screens.o Screen.o StatusScreen.o LogoScreen.o MenuScreen.o
     
 Screen.o: Screen.cc Screen.hh LetterBitmaps.h NumbersBitmaps.h
-	$(C++) -c -o Screen.o $(CFLAGS) Screen.cc
+	$(C++) -c -o Screen.o $(CFLAGS) $(INCLUDEDIRS) Screen.cc
         
 StatusScreen.o: StatusScreen.cc StatusScreen.hh Screen.hh
 	$(C++) -c -o StatusScreen.o $(CFLAGS) $(INCLUDEDIRS) StatusScreen.cc

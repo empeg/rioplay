@@ -16,12 +16,15 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include "DisplayThread.hh"
+#include "Stopwatch.h"
 #include "Log.hh"
+#include "MemAlloc.hh"
 
 DisplayThread::DisplayThread(void) {
     /* Initialize class variables */
     TopScreenPtr = NULL;
     BottomScreenPtr = NULL;
+    BacklightState = DISPLAY_BACKLIGHT_ON;
     
     /* Open display device */
     DisplayFD = open("/dev/display", O_RDWR);
@@ -138,3 +141,45 @@ void DisplayThread::Update(Screen *ScreenPtr) {
     }
     pthread_mutex_unlock(&ClassMutex);
 }
+
+void DisplayThread::ShowHourglass(void) {
+    /* This function will display an hourglass over the screen until the
+       next time the screen is updated */
+    unsigned int Xoffset = (128 - StopwatchWidth) / 2;
+    unsigned int Yoffset = (64 - StopwatchHeight) / 2;
+    
+    pthread_mutex_lock(&ClassMutex);
+    for(unsigned int y = 0; y < StopwatchHeight; y++) {
+        for(unsigned int x = 0; x < StopwatchWidth; x++) {
+            DrawPixel((StopwatchData[(y * StopwatchWidth) + x] == 0),
+                    Xoffset + x, Yoffset + y);
+        }
+    }
+    Push();
+    TopChanged = true;
+    BottomChanged = true;
+    pthread_mutex_unlock(&ClassMutex);
+}
+
+void DisplayThread::DrawPixel(bool Set, int x, int y) {
+    unsigned char fillvalue;
+    
+    if((x >= 128) || (y >= 64)) {
+        return;
+    }
+    
+    if(x & 1)
+        fillvalue = 0xf0;
+    else
+        fillvalue = 0x0f;
+
+    if(Set) {
+        /* Pixel should be filled */
+        Display[(x >> 1) + (64 * y)] |= fillvalue;
+    }
+    else {
+        /* Pixel should be clear */
+        Display[(x >> 1) + (64 * y)] &= ~(fillvalue);
+    }
+}
+    

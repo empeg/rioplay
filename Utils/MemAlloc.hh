@@ -15,17 +15,33 @@
 
 #include <stdlib.h>
 #include <string>
+#include <pthread.h>
+#include <new>
 
+// Uncomment this to use the debug versions of malloc, realloc,
+// free, new, and delete
 //#define ALLOC_DEBUG
 
 #ifdef ALLOC_DEBUG
 #define __malloc(x) MemAlloc::GetInstance()->Malloc(x, __FILE__, __LINE__)
 #define __realloc(x,y) MemAlloc::GetInstance()->Realloc(x, y, __FILE__, __LINE__)
 #define __free(x) MemAlloc::GetInstance()->Free(x, __FILE__, __LINE__)
+void *operator new(size_t size);
+void *operator new[](size_t size);
+void *operator new(size_t size, char *file, int line);
+void *operator new[](size_t size, char *file, int line);
+void operator delete(void *ptr);
+void operator delete[](void *ptr);
+#ifndef DONT_DEFINE_NEW
+#define new new((char *) __FILE__, __LINE__)
+#endif
+
 #else
+
 #define __malloc(x) malloc(x);
 #define __realloc(x,y) realloc(x,y)
 #define __free(x) free(x)
+
 #endif
 
 #define MemAllocTableSize 10240
@@ -46,6 +62,7 @@ private:
     string Filename[MemAllocTableSize];
     int Line[MemAllocTableSize];
     int Index;
+    pthread_mutex_t ClassMutex;
 };
 
 #endif /* MEMALLOC_HH */

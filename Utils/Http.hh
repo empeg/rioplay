@@ -14,6 +14,7 @@
 #define HTTP_HH
 
 #include <stdio.h>
+#include <string>
 
 class HttpConnection {
 public:
@@ -24,7 +25,7 @@ public:
     int GetString(char *buf, int bufsize);
     int GetDescriptor(void);
     FILE *GetFilePointer(void);
-    static char *UrlEncode(char **String);
+    static void UrlEncode(string &Str);
     
 private:
     void ParseUrl(char *Url);

@@ -42,7 +42,7 @@ typedef struct TagStruct {
     char Genre[32];
     char Bitrate[4];
     char PlaylistName[32];
-    char Codec[4];
+    char Codec[8];
     char Offset[4];
     char Duration[4];
     char TrackNumber[4];

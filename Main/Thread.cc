@@ -13,6 +13,15 @@
 #include <stdio.h>
 #include <pthread.h>
 #include "Thread.hh"
+#include "MemAlloc.hh"
+
+void *ThreadJump(void *arg) {
+    Thread *T;
+    
+    T = (Thread *) arg;
+    
+    return T->ThreadMain(NULL);
+}
 
 Thread::Thread(void) {
     pthread_mutex_init(&ClassMutex, NULL);
@@ -20,4 +29,13 @@ Thread::Thread(void) {
 }
 
 Thread::~Thread(void) {
+}
+
+void Thread::Start(void) {
+    /* Create thread */
+    pthread_create(&ThreadHandle, NULL, ThreadJump, this);
+}
+
+pthread_t *Thread::GetHandle(void) {
+    return &ThreadHandle;
 }

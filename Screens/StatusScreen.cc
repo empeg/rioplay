@@ -15,6 +15,7 @@
 #include "StatusScreen.hh"
 #include "NumbersBitmaps.h"
 #include "Tag.h"
+#include "MemAlloc.hh"
 
 StatusScreen::StatusScreen(void) {
     Minutes = 0;
@@ -22,6 +23,7 @@ StatusScreen::StatusScreen(void) {
     Title[0] = '\0';
     Artist[0] = '\0';
     TitleArtistChanged = false;
+    pthread_mutex_init(&ClassMutex, NULL);
 }
 
 StatusScreen::~StatusScreen(void) {
@@ -29,6 +31,7 @@ StatusScreen::~StatusScreen(void) {
 
 
 void StatusScreen::Update(char *Display) {
+    pthread_mutex_lock(&ClassMutex);
     if(TitleArtistChanged == true) {
         bzero(Display, 4096);
         TitleArtistChanged = false;
@@ -38,14 +41,18 @@ void StatusScreen::Update(char *Display) {
     StatusFont.DrawString(Display, Artist, 0, 17);
     StatusFont.DrawString(Display, Album, 0, 27);
     DrawHorizontalLine(Display, 0, 15, 128);
+    pthread_mutex_unlock(&ClassMutex);
 }
 
 void StatusScreen::SetTime(unsigned short NewMinutes, unsigned short NewSeconds) {
+    pthread_mutex_lock(&ClassMutex);
     Minutes = NewMinutes;
     Seconds = NewSeconds;
+    pthread_mutex_unlock(&ClassMutex);
 }
 
 void StatusScreen::SetAttribs(Tag TrackTag) {
+    pthread_mutex_lock(&ClassMutex);
     strncpy(Title, TrackTag.Title, MAXSTRINGLENGTH);
     strncpy(Artist, TrackTag.Artist, MAXSTRINGLENGTH);
     strncpy(Album, TrackTag.Album, MAXSTRINGLENGTH);
@@ -55,6 +62,7 @@ void StatusScreen::SetAttribs(Tag TrackTag) {
     Album[MAXSTRINGLENGTH-1] = '\0';
     
     TitleArtistChanged = true;
+    pthread_mutex_unlock(&ClassMutex);
 }
 
 void StatusScreen::DrawTime(char *Display, int minutes, int seconds) {

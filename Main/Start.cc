@@ -15,55 +15,51 @@
 #include <pthread.h>
 #include <string.h>
 #include "Player.h"
-#include "DisplayThread.hh"
-#include "AudioThread.hh"
-#include "RemoteThread.hh"
-#include "WebThread.hh"
 #include "Log.hh"
+#include "Globals.hh"
+#include "MemAlloc.hh"
 
-/* Be sure to have Display declared first */
-DisplayThread Display;
-RemoteThread Remote;
-AudioThread Audio;
-WebThread Web;
+/* MemAlloc class needs to be declared first so it is destroyed last */
+#ifdef ALLOC_DEBUG
+MemAlloc DummyMemAlloc;
+#endif
+
+/* Be sure to have Display declared before the other thread types */
+DisplayThread Globals::Display;
+RemoteThread Globals::Remote;
+WebThread Globals::Web;
+StatusScreen Globals::Status;
+PlaylistClass Globals::Playlist;
+RioServerSource Globals::RioServer;
+ShoutcastSource Globals::Shoutcast;
 Log DummyLog;
 
-void *ThreadJump(void *arg) {
-    Thread *T;
-    
-    T = (Thread *) arg;
-    
-    return T->ThreadMain(NULL);
-}
-
 int main() {
-    pthread_t ThreadHandle[4]; /* We will have 4 threads */
+    int ReturnVal;
     
     /* Print startup message */
-    //printf("%c[2J", 27);
     printf("\n\n");
     printf("RioPlay version %s (%s) started\n", PLAYER_VER, PLAYER_DATE);
     printf("%s\n", PLAYER_COPYRIGHT);
     printf("Please see %s for more information\n\n", PLAYER_WEBADDR);
-    
-    /* Create Audio thread */
-    pthread_create(&ThreadHandle[0], NULL, ThreadJump, &Audio);
-    
+
+    /* Create Playlist thread */
+    Globals::Playlist.Start();
+        
     /* Create Display thread */
-    pthread_create(&ThreadHandle[1], NULL, ThreadJump, &Display);
+    Globals::Display.Start();
     
     /* Create Remote Control thread */
-    pthread_create(&ThreadHandle[2], NULL, ThreadJump, &Remote);
+    Globals::Remote.Start();
     
     /* Create Web Interface thread */
-    pthread_create(&ThreadHandle[3], NULL, ThreadJump, &Web);
+    Globals::Web.Start();
     
-    /* Wait for Audio thread to exit */
-    pthread_join(ThreadHandle[0], NULL);
+    /* Wait for Remote Control thread to exit */
+    pthread_join(*Globals::Remote.GetHandle(), (void **) &ReturnVal);
     
-    printf("Main: Main thread exiting.\n");
-    
-    return 0;
+    printf("Main: Main thread exiting (exit status %d)\n", ReturnVal);
+    return ReturnVal;
 }
 
 

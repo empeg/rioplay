@@ -13,8 +13,6 @@
 #ifndef FONT_HH
 #define FONT_HH
 
-#include <stdio.h>
-
 class Font {
 public:
     Font(void);
@@ -37,6 +35,10 @@ inline int Font::GetHeight(void) {
 
 inline void Font::DrawPixel(char *Display, bool Set, int x, int y) {
     unsigned char fillvalue;
+    
+    if((x >= 128) || (y >= 64)) {
+        return;
+    }
     
     if(x & 1)
         fillvalue = 0xf0;

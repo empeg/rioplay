@@ -19,6 +19,7 @@
 #include <string.h>
 #include "WebThread.hh"
 #include "Log.hh"
+#include "MemAlloc.hh"
 
 extern int errno;
 

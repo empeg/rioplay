@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include "SmallFont.hh"
 #include "SmallFontBitmap.h"
+#include "MemAlloc.hh"
 
 SmallFont::SmallFont(void) {
     int x, y;

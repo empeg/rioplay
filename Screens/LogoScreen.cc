@@ -15,6 +15,7 @@
 #include "LogoScreen.hh"
 #include "RioPlay-logo.h"
 #include "Player.h"
+#include "MemAlloc.hh"
 
 LogoScreen::LogoScreen(void) {
 }
@@ -26,7 +27,7 @@ LogoScreen::~LogoScreen(void) {
 void LogoScreen::Update(char *Display) {
     int x, y;
     unsigned char fillvalue;
-    char VersionString[16];
+    char VersionString[24];
     
     for(y = 0; y < 64; y++) {
         for(x = 0; x < 128; x++) {

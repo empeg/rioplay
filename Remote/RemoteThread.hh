@@ -16,25 +16,25 @@
 #include "Thread.hh"
 #include "MenuScreen.hh"
 
-class Playlist;
+class InputSource;
 
 class RemoteThread : public Thread {
 public:
     RemoteThread(void);
     ~RemoteThread(void);
     virtual void *ThreadMain(void *arg);
-    Playlist *GetPlaylist(void);
+    InputSource *GetInputSource(void);
     
 private:
     void SetVolume();
     unsigned long GetKeycode(void);
     void MenuHandleKeypress(unsigned long KeyCode);
-    Playlist *PList, *TempPList;
+    InputSource *PList, *TempPList;
     int IrFD;
     int MixerFD;
     int Volume;
     MenuScreen ActiveMenu;
-    int PlaylistMenuActive;
+    int InputSourceMenuActive;
 };
 
 #endif /* #ifndef REMOTETHREAD_HH */

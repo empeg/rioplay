@@ -10,17 +10,17 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
+#include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
 #include "BufferClass.hh"
 #include "Log.hh"
-#include <stdio.h>
+#include "MemAlloc.hh"
 
 #define MIN_BUFFER_SIZE 8192
 
 extern int errno;
-extern void *ThreadJump(void *arg);
 
 BufferClass::BufferClass(int inFileD, int inBufSize) {
     /* Initialize class members */
@@ -44,7 +44,7 @@ BufferClass::BufferClass(int inFileD, int inBufSize) {
     }
     
     /* Start the reader thread */
-    pthread_create(&ReaderThreadID, NULL, ThreadJump, this);
+    Start();
     
     /* Wait for signal which indicates that reader thread is running */
     pthread_mutex_lock(&ClassMutex);
@@ -54,9 +54,9 @@ BufferClass::BufferClass(int inFileD, int inBufSize) {
 
 BufferClass::~BufferClass(void) {
     /* Cancel the reader thread */
-    if(pthread_cancel(ReaderThreadID) != ESRCH) {
+    if(pthread_cancel(ThreadHandle) != ESRCH) {
         /* Wait until reader thread is done */
-        pthread_join(ReaderThreadID, NULL);
+        pthread_join(ThreadHandle, NULL);
     }
     
     /* Deallocate buffer */

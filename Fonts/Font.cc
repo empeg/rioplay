@@ -12,6 +12,7 @@
 
 #include <string.h>
 #include "Font.hh"
+#include "MemAlloc.hh"
 
 Font::Font(void) {
 }

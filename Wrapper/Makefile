@@ -1,2 +1,2 @@
 Wrapper.o: Wrapper.c
-	gcc -c -o Wrapper.o $(CFLAGS) Wrapper.c
+	$(CC) -c -o Wrapper.o $(CFLAGS) Wrapper.c

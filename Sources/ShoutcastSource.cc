@@ -15,19 +15,21 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
-#include "ShoutcastList.hh"
-#include "Playlist.hh"
+#include <errno.h>
+#include "ShoutcastSource.hh"
 #include "Screen.hh"
-#include "Commands.h"
-#include "DisplayThread.hh"
 #include "MenuScreen.hh"
 #include "KeyCodes.h"
-#include "MemAlloc.hh"
 #include "Log.hh"
+#include "Mp3Decoder.hh"
+#include "FlacDecoder.hh"
+#include "Globals.hh"
+#include "MemAlloc.hh"
 
-extern DisplayThread Display;
+extern int errno;
+AudioOutputDevice PlaylistAudioOut;
 
-ShoutcastList::ShoutcastList(void) {
+ShoutcastSource::ShoutcastSource(void) {
     FILE *fp;
     char TempString[256];
     char *TempPtr;
@@ -40,14 +42,12 @@ ShoutcastList::ShoutcastList(void) {
     StreamNames = NULL;
     StreamUrls = NULL;
     NumUrls = NULL;
-    
+
     if((fp = fopen("/etc/streams.cfg", "r"))==NULL){
       Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
 			     "streams.cfg is missing");
       return;
     }
-    
-
     
     while(fgets(TempString, 256, fp) != NULL) {
         if((TempPtr = strstr(TempString, "\r")) != NULL) {
@@ -95,7 +95,11 @@ ShoutcastList::ShoutcastList(void) {
     }
 }
 
-ShoutcastList::~ShoutcastList(void) {
+ShoutcastSource::~ShoutcastSource(void) {
+    /* Stop playing and clean up decoder */
+    Stop();
+    
+    /* Clean up other member variables */
     for(int i = 0; i < NumEntries; i++) {
         __free(StreamNames[i]);
         for(int j = 0; j < NumUrls[i]; j++) {
@@ -108,7 +112,7 @@ ShoutcastList::~ShoutcastList(void) {
     __free(NumUrls);
 }
 
-Tag ShoutcastList::GetTag(int EntryNumber) {
+Tag ShoutcastSource::GetTag(int EntryNumber) {
     Tag ReturnVal;
 
     /* Set to zeros to be safe */
@@ -121,17 +125,14 @@ Tag ShoutcastList::GetTag(int EntryNumber) {
     return ReturnVal;
 }
 
-char *ShoutcastList::GetFilename(char *Filename, int EntryNumber) {
-    strcpy(Filename, StreamUrls[Position - 1][EntryNumber - 1]);
-    strcpy(StreamTitle, StreamNames[Position - 1]);
-    
-    return Filename;
-}
-
-void ShoutcastList::SetMetadata(char *Metadata, int MetadataLength) {
+Tag ShoutcastSource::SetMetadata(char *Metadata, int MetadataLength) {
     char *FirstQuote = NULL, *SecondQuote = NULL;
     int i;
+    Tag ReturnVal;
 
+    /* Set to zeros to be safe */
+    bzero(&ReturnVal, sizeof(ReturnVal));
+    
     for(i = 0; i < MetadataLength; i++) {
         if(Metadata[i] == '\'') {
             if(FirstQuote == NULL) {
@@ -148,7 +149,7 @@ void ShoutcastList::SetMetadata(char *Metadata, int MetadataLength) {
     
     if((FirstQuote == NULL) || (SecondQuote == NULL)) {
         /* Didn't find two quotes */
-        return;
+        return ReturnVal;
     }
     
     /* Copy the title out of the metadata */
@@ -157,25 +158,28 @@ void ShoutcastList::SetMetadata(char *Metadata, int MetadataLength) {
         StreamTitle[SecondQuote - FirstQuote - 1] = '\0';
     }
 
-    return;
+    /* Copy stream title into Title */
+    strcpy(ReturnVal.Title, StreamTitle);
+    
+    return ReturnVal;
 }
 
-int ShoutcastList::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) {
+int ShoutcastSource::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) {
     static int CurrentMenu = 0;
     
     if((Keycode == PANEL_MENU) || (Keycode == REMOTE_MENU)) {
-        Display.RemoveTopScreen(ActiveMenu);
+        Globals::Display.RemoveTopScreen(ActiveMenu);
         CurrentMenu = 0;
         return 0;
     }
     else if((Keycode == PANEL_WHEEL_CW) || (Keycode == REMOTE_DOWN) || (Keycode == REMOTE_DOWN_REPEAT)) {
         ActiveMenu->Advance();
-        Display.Update(ActiveMenu);
+        Globals::Display.Update(ActiveMenu);
         return 1;
     }
     else if((Keycode == PANEL_WHEEL_CCW) || (Keycode == REMOTE_UP) || (Keycode == REMOTE_UP_REPEAT)) {
         ActiveMenu->Reverse();
-        Display.Update(ActiveMenu);
+        Globals::Display.Update(ActiveMenu);
         return 1;
     }
 
@@ -187,41 +191,36 @@ int ShoutcastList::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) 
                 ActiveMenu->AddOption(StreamNames[i]);
             }
             CurrentMenu = 1;
-            Display.Update(ActiveMenu);
+            Globals::Display.Update(ActiveMenu);
             return 1;
             break;
             
         case 1:
-            Position = ActiveMenu->GetSelection();
             UrlPosition = 1;
-            Display.RemoveTopScreen(ActiveMenu);
             CurrentMenu = 0;
+            Globals::Display.RemoveTopScreen(ActiveMenu);
+            Globals::Playlist.Enqueue(this, ActiveMenu->GetSelection());
             return 2;
             break;
     }
     return 0;
 }
 
-void ShoutcastList::Advance(void) {
-    UrlPosition++;
-    if(UrlPosition > NumUrls[Position - 1]) {
-        /* We've completed this sub-list, move on to the next sub-list */
-        //Playlist::Advance();
-        
-        UrlPosition = 1;
+void ShoutcastSource::Play(unsigned int ID) {
+    strcpy(StreamTitle, StreamNames[ID - 1]);
+    
+    /* Set title on status screen */
+    Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
+            "Playing Streaming Station: %s", StreamTitle);
+    Globals::Status.SetAttribs(GetTag(0));
+    Globals::Display.Update(&Globals::Status);
+    
+    ServerConn = OpenFile(StreamUrls[ID - 1][UrlPosition - 1]);
+    
+    if(Dec) {
+        delete Dec;
     }
-}        
-
-void ShoutcastList::Reverse(void) {
-    UrlPosition--;
-    if(UrlPosition < 1) {
-        /* We've completed this sub-list, move on to the previous sub-list */
-        //Playlist::Reverse();
-
-        UrlPosition = NumUrls[Position - 1];
-    }
-}
-
-int ShoutcastList::GetPosition(void) {
-    return UrlPosition;
+    Dec = new Mp3Decoder(ServerConn->GetDescriptor(), &PlaylistAudioOut, this);
+    Dec->SetMetadataFrequency(MetadataFrequency);
+    Dec->Start();
 }

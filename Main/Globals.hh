@@ -10,13 +10,23 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-#ifndef MADCALLBACKS_H
-#define MADCALLBACKS_H
+#include "AudioOutputDevice.hh"
+#include "DisplayThread.hh"
+#include "RemoteThread.hh"
+#include "WebThread.hh"
+#include "StatusScreen.hh"
+#include "Playlist.hh"
+#include "RioServerSource.hh"
+#include "ShoutcastSource.hh"
 
-#include "mad.h"
-
-enum mad_flow InputCallbackJump(void *ptr, struct mad_stream *stream);
-enum mad_flow OutputCallbackJump(void *ptr, struct mad_header const *header, struct mad_pcm *pcm);
-enum mad_flow ErrorCallbackJump(void *ptr, struct mad_stream *stream, struct mad_frame *frame);
-
-#endif
+class Globals {
+public:
+    static AudioOutputDevice AudioOut;
+    static DisplayThread Display;
+    static RemoteThread Remote;
+    static WebThread Web;
+    static StatusScreen Status;
+    static PlaylistClass Playlist;
+    static RioServerSource RioServer;
+    static ShoutcastSource Shoutcast;
+};

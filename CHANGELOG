@@ -1,3 +1,43 @@
+Version 0.29alpha1 (08/21/02)
+    - Reorganized directories and class structures
+        - Playlists/ now contains a generic playlist class which is
+          responsible for the master playlist
+        - Sources/ directory contains most of what used to be in
+          Playlists/ which are now just classes that provide entries
+          to the master playlist
+        - Separated AudioThread into a separate class for audio output
+          (AudioOutputDevice) and classes for decoding various audio
+          formats (currently FlacDecoder and Mp3Decoder)
+    - Decoder thread is now created each time a song is played so that
+      the right type of decoder can be created depending on the song type
+    - Added FLAC support (requires JReceiver to serve up flac files)
+    - Added stopwatch icon for when the Rio is busy so the user knows
+      something's going on
+    - Master playlist: now, when you select music from the "Select Music"
+      menu, it is enqueued in the master playlist.  This means you can
+      enqueue a few songs from the Rio server, then a Shoutcast stream,
+      then some more Rio server songs, etc. and advance through them
+      all while they're playing
+    - If something is already playing when you select some more music,
+      since it is enqueued in the playlist, playback will no longer jump
+      to the newly enqueued music.  If you want to start playing it right
+      away, clear the playlist first by selecting "Clear Active Playlist"
+      under the Audio Receiver menu.  In the future a feature will be
+      added which will allow you to press "play" when selecting music
+      to cause it to overwrite the current playlist instead of enqueueing
+      it
+    - Auto off for the backlight seems to be flaky right now.  It doesn't
+      always go off.  My only thought right now is that for some reason
+      the Remote thread isn't becoming active.  Maybe due to too much load?
+    - Added support for C++ new() and delete() operators to the memory
+      allocation debug code (which is disabled by default).
+    - Converted a lot of areas that used C strings to the C++ string class
+      which cleaned up the code a lot.  There's still more C to C++ conversion
+      work to do though.
+    - Modified init so it is no longer dependent on the system() call which
+      means we no longer need a shell in the .arf file which eliminates
+      the extra process that was running on the box.
+
 Version 0.28 (07/18/02)
     - Player now comes out of pseudo power down mode in STOP mode instead
       of PLAY mode

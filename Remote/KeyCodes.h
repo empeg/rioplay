@@ -44,5 +44,6 @@
 #define REMOTE_DOWN_REPEAT      0x80000186
 #define REMOTE_ENTER     0x00000182
 #define REMOTE_SEARCH    0x0000019f
+#define REMOTE_RANDOM    0x00000189
 
 #endif /* #ifndef KEYCODES_H */

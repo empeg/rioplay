@@ -37,10 +37,12 @@ public:
     void Update(Screen *ScreenPtr);
     void OnOff(int OnOff);
     void Backlight(int State);
+    void ShowHourglass(void);
     
 private:
     void Push(void);
     void Clear(void);
+    void DrawPixel(bool Set, int x, int y);
     int DisplayFD;
     char *Display;
     Screen *TopScreenPtr;
@@ -48,6 +50,7 @@ private:
     bool TopChanged;
     bool BottomChanged;
     LogoScreen Logo;
+    int BacklightState;
 };
 
 inline void DisplayThread::Clear(void) {
@@ -61,14 +64,21 @@ inline void DisplayThread::Push(void) {
 
 inline void DisplayThread::OnOff(int OnOff) {
     /* Power on/off the display */
+    pthread_mutex_lock(&ClassMutex);
     ioctl((DisplayFD), _IOW('d', 1, int), (OnOff));
     usleep(DISPLAY_DELAY);
+    pthread_mutex_unlock(&ClassMutex);
 }
 
 inline void DisplayThread::Backlight(int State) {
     /* Turn on/off the backlight */
-    ioctl((DisplayFD), _IOW('d', 11, int), &State);
-    usleep(DISPLAY_DELAY);
+    pthread_mutex_lock(&ClassMutex);
+    if(BacklightState != State) {
+        ioctl((DisplayFD), _IOW('d', 11, int), &State);
+        BacklightState = State;
+        usleep(DISPLAY_DELAY);
+    }
+    pthread_mutex_unlock(&ClassMutex);
 }
 
 #endif /* #ifndef DISPLAY_HH */

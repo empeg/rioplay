@@ -13,6 +13,7 @@
 #ifndef STATUSSCREEN_HH
 #define STATUSSCREEN_HH
 
+#include <pthread.h>
 #include "Screen.hh"
 #include "SmallFont.hh"
 #include "Tag.h"
@@ -38,6 +39,7 @@ private:
     char Album[MAXSTRINGLENGTH];
     bool TitleArtistChanged;
     SmallFont StatusFont;
+    pthread_mutex_t ClassMutex;
 };
 
 #endif /* #ifndef STATUSSCREEN_HH */

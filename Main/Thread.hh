@@ -20,10 +20,13 @@ public:
     Thread(void);
     virtual ~Thread(void);
     virtual void *ThreadMain(void *arg) = 0;
+    void Start(void);
+    pthread_t *GetHandle(void);
 
 protected:
     pthread_mutex_t ClassMutex;
     pthread_cond_t ClassCondition;
+    pthread_t ThreadHandle;
 };
 
 #endif /* #ifndef THREAD_HH */

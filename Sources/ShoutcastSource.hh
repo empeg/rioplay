@@ -10,25 +10,22 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-#ifndef SHOUTCASTLIST_HH
-#define SHOUTCASTLIST_HH
+#ifndef SHOUTCASTSOURCE_HH
+#define SHOUTCASTSOURCE_HH
 
-#include "Playlist.hh"
+#include "InputSource.hh"
 #include "Tag.h"
 
 class MenuScreen;
 
-class ShoutcastList : public Playlist {
+class ShoutcastSource : public InputSource {
 public:
-    ShoutcastList(void);
-    ~ShoutcastList(void);
+    ShoutcastSource(void);
+    ~ShoutcastSource(void);
     Tag GetTag(int EntryNumber);
-    char *GetFilename(char *Filename, int EntryNumber);
-    void SetMetadata(char *Metadata, int MetadataLength);
+    Tag SetMetadata(char *Metadata, int MetadataLength);
     int CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu);
-    void Advance(void);
-    void Reverse(void);
-    int GetPosition(void);
+    void Play(unsigned int ID);
 
 private:
     char StreamTitle[256];
@@ -38,4 +35,4 @@ private:
     int UrlPosition;
 };
 
-#endif /* #ifndef SHOUTCASTLIST_HH */
+#endif /* #ifndef SHOUTCASTSOURCE_HH */

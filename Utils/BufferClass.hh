@@ -25,7 +25,6 @@ public:
     
 private:
     int FileD; /* File descriptor to read from */
-    pthread_t ReaderThreadID;
     char *Buf;
     int BufferSize;
     int BytesInBuffer;

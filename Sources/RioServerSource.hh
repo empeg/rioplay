@@ -10,38 +10,46 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-#ifndef RIOSERVERLIST_H
-#define RIOSERVERLIST_H
+#ifndef RIOSERVERSOURCE_H
+#define RIOSERVERSOURCE_H
 
-#include "Playlist.hh"
+#include <vector>
+#include <list>
+#include <string>
+#include "InputSource.hh"
 #include "Tag.h"
 
 class MenuScreen;
 
-class RioServerList : public Playlist {
+class StringID {
 public:
-    RioServerList(void);
-    ~RioServerList(void);
-    virtual void Advance(void);
-    virtual void Reverse(void);
-    virtual int GetPosition(void);
-    virtual Tag GetTag(int EntryNumber);
-    virtual char *GetFilename(char *Filename, int EntryNumber);
+    StringID(void);
+    ~StringID(void);
+    StringID(string inString, int inID);
+    bool operator<(const StringID& SID);
+    string Str;
+    int ID;
+};
+
+class RioServerSource : public InputSource {
+public:
+    RioServerSource(void);
+    ~RioServerSource(void);
+    virtual void Play(unsigned int ID);
+    virtual Tag GetTag(int ID);
     void DoQuery(char *Field, char *Query);
     int CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu);
 
 private:    
-    void DoResults(char *Field, char *Query);
+    void DoResults(char *Field, const char *Query);
     void DoPlaylists(void);
     void DoPlaylistContents(int ID);
     
-    char **List;              /* Array of results returned from server */
     char Server[64];          /* Name of Rio Server */
     unsigned short Port;      /* Port of Rio Server */
-    int *SongID;              /* Current SongID */
-    int NumSongIDEntries;
-    int SongIDPosition;
     char SearchField[8];
+    list<StringID> SongList;
+    vector<string> List;
 };
 
-#endif /* #ifndef RIOSERVERLIST_H */
+#endif /* #ifndef RIOSERVERSOURCE_H */

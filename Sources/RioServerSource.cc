@@ -18,22 +18,36 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <errno.h>
-#include "RioServerList.hh"
-#include "Playlist.hh"
+#include "RioServerSource.hh"
 #include "Http.hh"
 #include "Screen.hh"
-#include "DisplayThread.hh"
-#include "Commands.h"
 #include "MenuScreen.hh"
 #include "KeyCodes.h"
 #include "Log.hh"
+#include "Globals.hh"
+#include "Mp3Decoder.hh"
+#include "FlacDecoder.hh"
 #include "MemAlloc.hh"
 
 extern int errno;
+extern AudioOutputDevice PlaylistAudioOut;
 
-extern DisplayThread Display;
+StringID::StringID(void) {
+}
 
-RioServerList::RioServerList(void) {
+StringID::~StringID(void) {
+}
+
+StringID::StringID(string inString, int inID) {
+    Str = inString;
+    ID = inID;
+}
+
+bool StringID::operator<(const StringID& SID) {
+    return (Str < SID.Str);
+}
+
+RioServerSource::RioServerSource(void) {
     char SSDPRequest[] = "upnp:uuid:1D274DB0-F053-11d3-BF72-0050DA689B2F";
     struct sockaddr_in LocalAddr, BroadcastAddr;
     int SSDP;
@@ -41,10 +55,6 @@ RioServerList::RioServerList(void) {
     char TempString[256];
     FILE *fp;
     char *HttpLoc, *ColonLoc, *SlashLoc;
-    
-    NumEntries = 0;
-    SongID = NULL;
-    List = NULL;
     
     /* Time to find the server... */
     if((SSDP = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -95,25 +105,16 @@ RioServerList::RioServerList(void) {
     fclose(fp);
 }
 
-RioServerList::~RioServerList(void) {
-    for(int i = 0; i < NumEntries; i++) {
-        __free(List[i]);
-    }
-    if(List != NULL) {
-        __free(List);
-    }
-    if(SongID != NULL) {
-        __free(SongID);
-    }
+RioServerSource::~RioServerSource(void) {
 }
 
-void RioServerList::DoQuery(char *Field, char *Query) {
+void RioServerSource::DoQuery(char *Field, char *Query) {
     HttpConnection *Http = NULL;
     char TempString[256];
     char *TempPtr;
-    int i;
     FILE *fp;
-    
+
+    TempString[255] = '\0';    
     strcpy(SearchField, Field);
     
     /* Open a connection to the Rio HTTP Server */    
@@ -132,24 +133,13 @@ void RioServerList::DoQuery(char *Field, char *Query) {
     fp = Http->GetFilePointer();
     
     /* Throw away "matches=" response */
-    fgets(TempString, 256, fp);
+    fgets(TempString, 255, fp);
 
-    /* Free the old list */
-    if(List != NULL) {
-        for(i = 0; i < NumEntries; i++) {
-            __free(List[i]);
-        }
-        __free(List);
-        List = NULL;
-    }
+    /* Clear the list */
+    List.clear();
     
     /* Read query responses */
-    for(i = 0; fgets(TempString, 256, fp) > 0; i++) {
-        /* Check to see if we need to expand the array */
-        if((i % 10) == 0) {
-            List = (char **) __realloc(List, sizeof(char *) * (i + 10));
-        }
-        
+    while(fgets(TempString, 255, fp) > 0) {
         /* fgets() does not remove trailing '\n', so 
            we need to take care of it */
         if(TempString[strlen(TempString) - 1] == '\n') {
@@ -159,33 +149,20 @@ void RioServerList::DoQuery(char *Field, char *Query) {
         /* Get start pointer of actual title string */
         TempPtr = strstr(TempString, ":") + 1;
         
-        /* Allocate space for the title string */
-        List[i] = (char *) __malloc(sizeof(char) * (strlen(TempPtr) + 1));
-        
-        /* Assign */
-        strcpy(List[i], TempPtr);
-    }
-    NumEntries = i;
-    if(NumEntries > 0) {
-        Position = 1;
-    }
-    else {
-        Position = 0;
+        /* Insert into list */
+        List.push_back(string(TempPtr));
     }
 
     /* Close file descriptor and socket */
     delete Http;
 }
 
-void RioServerList::DoResults(char *Field, char *Query) {
+void RioServerSource::DoResults(char *Field, const char *Query) {
     HttpConnection *Http = NULL;
     char TempString[256];
+    char *TempPtr;
     int TempSongID;
-    int i;
     FILE *fp;
-
-    NumSongIDEntries = 0;
-    SongIDPosition = 0;
     
     /* Open a connection to the Rio HTTP Server */    
     sprintf(TempString, "http://%s:%d/results?%s=%s&_extended=1", Server, Port, Field, Query);
@@ -202,33 +179,28 @@ void RioServerList::DoResults(char *Field, char *Query) {
     /* Open descriptor as a file so we can use fgets */
     fp = Http->GetFilePointer();
     
-    /* Free SongID list */
-    if(SongID != NULL) {
-        __free(SongID);
-        SongID = NULL;
-    }
+    /* Clear the list */
+    SongList.clear();
     
     /* Read the Song ID */
-    for(i = 0; fgets(TempString, 256, fp) > 0; i++) {
+    while(fgets(TempString, 256, fp) > 0) {
         sscanf(TempString, "%x=", &TempSongID);
-        /* Check to see if we need to expand the array */
-        if((i % 10) == 0) {
-            SongID = (int *) __realloc(SongID, sizeof(int) * (i + 10));
-        }
-        SongID[i] = TempSongID;
+        TempPtr = strstr(TempString, "=") + 2;
+        *(strstr(TempPtr, "\n")) = '\0';
+        SongList.push_front(StringID(string(TempPtr), TempSongID));
     }
-    NumSongIDEntries = i;
-    SongIDPosition = 1;
 
+    /* Sort the list so it matches what was displayed on screen */
+    SongList.sort();
+    
     /* Close file descriptor and socket */
     delete Http;
 }
 
-void RioServerList::DoPlaylists(void) {
+void RioServerSource::DoPlaylists(void) {
     HttpConnection *Http = NULL;
     char TempString[256];
     char *TempPtr;
-    int i;
     FILE *fp;
     
     /* Open a connection to the Rio HTTP Server */    
@@ -245,28 +217,13 @@ void RioServerList::DoPlaylists(void) {
     
     /* Open descriptor as a file so we can use fgets */
     fp = Http->GetFilePointer();
-    
-    /* Free the old list */
-    if(List != NULL) {
-        for(i = 0; i < NumEntries; i++) {
-            __free(List[i]);
-        }
-        __free(List);
-        List = NULL;
-    }
-    if(SongID != NULL) {
-        __free(SongID);
-        SongID = NULL;
-    }
+
+    /* Clear the list */
+    SongList.clear();
+    List.clear();
     
     /* Read query responses */
-    for(i = 0; fgets(TempString, 256, fp) > 0; i++) {
-        /* Check to see if we need to expand the array */
-        if((i % 10) == 0) {
-            List = (char **) __realloc(List, sizeof(char *) * (i + 10));
-            SongID = (int *) __realloc(SongID, sizeof(int) * (i + 10));
-        }
-        
+    while(fgets(TempString, 256, fp) > 0) {
         /* fgets() does not remove trailing '\n', so 
            we need to take care of it */
         if(TempString[strlen(TempString) - 1] == '\n') {
@@ -276,32 +233,19 @@ void RioServerList::DoPlaylists(void) {
         /* Get start pointer of actual title string */
         TempPtr = strstr(TempString, "=") + 2;
         
-        /* Allocate space for the title string */
-        List[i] = (char *) __malloc(sizeof(char) * (strlen(TempPtr) + 1));
-        
         /* Assign */
-        strcpy(List[i], TempPtr);
-        SongID[i] = strtol(TempString, NULL, 16);
-    }
-    NumEntries = i;
-    NumSongIDEntries = i;
-    if(NumEntries > 0) {
-        Position = 1;
-        SongIDPosition = 1;
-    }
-    else {
-        Position = 0;
-        SongIDPosition = 0;
+        SongList.push_back(StringID(string(TempPtr), strtol(TempString, NULL, 16)));
+        List.push_back(string(TempPtr));
     }
 
     /* Close file descriptor and socket */
     delete Http;
 }
 
-void RioServerList::DoPlaylistContents(int ID) {
+void RioServerSource::DoPlaylistContents(int ID) {
     HttpConnection *Http = NULL;
     char TempString[256];
-    int i;
+    char *TempPtr;
     int TempSongID;
     FILE *fp;
     
@@ -321,22 +265,15 @@ void RioServerList::DoPlaylistContents(int ID) {
     fp = Http->GetFilePointer();
     
     /* Free SongID list */
-    if(SongID != NULL) {
-        __free(SongID);
-        SongID = NULL;
-    }
+    SongList.clear();
     
     /* Read the Song ID */
-    for(i = 0; fgets(TempString, 256, fp) > 0; i++) {
+    while(fgets(TempString, 256, fp) > 0) {
         sscanf(TempString, "%x=", &TempSongID);
-        /* Check to see if we need to expand the array */
-        if((i % 10) == 0) {
-            SongID = (int *) __realloc(SongID, sizeof(int) * (i + 10));
-        }
-        SongID[i] = TempSongID;
+        TempPtr = strstr(TempString, "=") + 2;
+        *(strstr(TempPtr, "\n")) = '\0';
+        SongList.push_back(StringID(string(TempPtr), TempSongID));
     }
-    NumSongIDEntries = i;
-    SongIDPosition = 1;
 
     /* Close file descriptor and socket */
     delete Http;
@@ -345,7 +282,7 @@ void RioServerList::DoPlaylistContents(int ID) {
     return;
 }
 
-Tag RioServerList::GetTag(int EntryNumber) {
+Tag RioServerSource::GetTag(int ID) {
     HttpConnection *Http = NULL;
     int QueryFD;
     char TempString[256];
@@ -357,12 +294,8 @@ Tag RioServerList::GetTag(int EntryNumber) {
     /* Set to zeros to be safe */
     bzero(&ReturnVal, sizeof(ReturnVal));
     
-    if(EntryNumber <= 0) {
-        return ReturnVal;
-    }
-    
     /* Open a connection to the Rio HTTP Server */    
-    sprintf(TempString, "http://%s:%d/tags/%x", Server, Port, SongID[EntryNumber - 1]);
+    sprintf(TempString, "http://%s:%d/tags/%x", Server, Port, ID);
     Http = new HttpConnection(TempString);
     if((QueryFD = Http->Connect()) < 0) {
         Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
@@ -397,6 +330,11 @@ Tag RioServerList::GetTag(int EntryNumber) {
                 
             case TAG_KEY_GENRE:
                 memcpy(ReturnVal.Genre, Data, Size);
+                break;
+                
+            case TAG_KEY_CODEC:
+                memcpy(ReturnVal.Codec, Data, Size);
+                break;
                 
             default:
                 break;
@@ -410,31 +348,24 @@ Tag RioServerList::GetTag(int EntryNumber) {
     return ReturnVal;
 }
 
-char *RioServerList::GetFilename(char *Filename, int EntryNumber) {
-    if(EntryNumber <= 0) {
-        return NULL;
-    }
-    sprintf(Filename, "http://%s:%d/content/%x", Server, Port, SongID[EntryNumber - 1]);
-    return Filename;
-}
-
-int RioServerList::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) {
+int RioServerSource::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) {
     static int CurrentMenu = 0;
+    list<StringID>::iterator IDiter;
     int Selection;
     
     if((Keycode == PANEL_MENU) || (Keycode == REMOTE_MENU)) {
-        Display.RemoveTopScreen(ActiveMenu);
+        Globals::Display.RemoveTopScreen(ActiveMenu);
         CurrentMenu = 0;
         return 0;
     }
     else if((Keycode == PANEL_WHEEL_CW) || (Keycode == REMOTE_DOWN) || (Keycode == REMOTE_DOWN_REPEAT)) {
         ActiveMenu->Advance();
-        Display.Update(ActiveMenu);
+        Globals::Display.Update(ActiveMenu);
         return 1;
     }
     else if((Keycode == PANEL_WHEEL_CCW) || (Keycode == REMOTE_UP) || (Keycode == REMOTE_UP_REPEAT)) {
         ActiveMenu->Reverse();
-        Display.Update(ActiveMenu);
+        Globals::Display.Update(ActiveMenu);
         return 1;
     }
 
@@ -448,7 +379,7 @@ int RioServerList::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) 
             ActiveMenu->AddOption("Title");
             ActiveMenu->AddOption("Playlist");
             CurrentMenu = 1;
-            Display.Update(ActiveMenu);
+            Globals::Display.Update(ActiveMenu);
             return 1;
             break;
             
@@ -457,6 +388,7 @@ int RioServerList::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) 
             ActiveMenu->ClearOptions();
             ActiveMenu->SetTitle("Select Artist");
             CurrentMenu = 2;
+            Globals::Display.ShowHourglass();
             switch(Selection) {
                 case 1:
                     ActiveMenu->AddOption("Play All");
@@ -479,42 +411,44 @@ int RioServerList::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) 
                     CurrentMenu = 3;
                     break;
             }
-            for(int i = 0; i < NumEntries; i++ ) {
-                ActiveMenu->AddOption(List[i]);
+            for(vector<string>::iterator iter = List.begin(); iter != List.end();
+                    iter++) {
+                ActiveMenu->AddOption((*iter).c_str());
             }
-            Display.Update(ActiveMenu);
+            Globals::Display.Update(ActiveMenu);
             return 1;
             break;
             
         case 2:
+            Globals::Display.ShowHourglass();
             Selection = ActiveMenu->GetSelection();
             if(Selection > 1) {
-                if(Selection == 2) {
-                    for(int i = 1; i < NumEntries; i++) {
-                        __free(List[i]);
-                    }
-                    NumEntries = 1;
-                }
-                else {
-                    List[0] = (char *) __realloc(List[0], strlen(List[Selection - 2]) + 1);
-                    strcpy(List[0], List[Selection - 2]);
-                    for(int i = 1; i < NumEntries; i++) {
-                        __free(List[i]);
-                    }
-                    NumEntries = 1;
-                }
+                HttpConnection::UrlEncode(List[Selection - 2]);
+                DoResults(SearchField, List[Selection - 2].c_str());
             }
-            DoResults(SearchField, HttpConnection::UrlEncode(&List[0]));
-            Display.RemoveTopScreen(ActiveMenu);
+            else {
+                DoResults(SearchField, "");
+            }
             CurrentMenu = 0;
+            for(IDiter = SongList.begin();
+                    IDiter != SongList.end(); IDiter++) {
+                Globals::Playlist.Enqueue(this, (*IDiter).ID);
+            }
+            Globals::Display.RemoveTopScreen(ActiveMenu);
             return 2;
             break;
             
         case 3:
-            Selection = ActiveMenu->GetSelection();
-            DoPlaylistContents(SongID[Selection - 1]);
-            NumEntries = 1;
-            Display.RemoveTopScreen(ActiveMenu);
+            IDiter = SongList.begin();
+            /* Seems like there should be a better way to do this */
+            for(int i = 0; i < (ActiveMenu->GetSelection() - 1); i++) {
+                IDiter++;
+            }
+            DoPlaylistContents((*IDiter).ID);
+            for(IDiter = SongList.begin(); IDiter != SongList.end(); IDiter++) {
+                Globals::Playlist.Enqueue(this, (*IDiter).ID);
+            }
+            Globals::Display.RemoveTopScreen(ActiveMenu);
             CurrentMenu = 0;
             return 2;
             break;
@@ -522,40 +456,53 @@ int RioServerList::CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) 
     return 0;
 }
 
-void RioServerList::Advance(void) {
-    int OldPosition;
+void RioServerSource::Play(unsigned int ID) {
+    char Filename[1024];
+    sprintf(Filename, "http://%s:%d/content/%x", Server, Port, ID);
     
-    SongIDPosition++;
-    if(SongIDPosition > NumSongIDEntries) {
-        /* We've completed this sub-list, move on to the next sub-list */
-        OldPosition = Position;
-        Playlist::Advance();
-        
-        /* Build a new sub-list of SongIDs */
-        if(OldPosition != Position) {
-            DoResults(SearchField, HttpConnection::UrlEncode(&List[Position - 1]));
-        }
-        SongIDPosition = 1;
-    }
-}        
-
-void RioServerList::Reverse(void) {
-    int OldPosition;
+    ServerConn = OpenFile(Filename);
     
-    SongIDPosition--;
-    if(SongIDPosition < 1) {
-        /* We've completed this sub-list, move on to the previous sub-list */
-        OldPosition = Position;
-        Playlist::Reverse();
-
-        /* Build a new sub-list of SongIDs */
-        if(OldPosition != Position) {
-            DoResults(SearchField, HttpConnection::UrlEncode(&List[Position - 1]));
-        }
-        SongIDPosition = NumSongIDEntries;
+    /* If there's already a decoder running, kill it */
+    if(Dec) {
+        delete Dec;
+        Dec = NULL;
     }
-}
-
-int RioServerList::GetPosition(void) {
-    return SongIDPosition;
+    
+    /* Get track info */
+    Tag TrackTag;
+    TrackTag = GetTag(ID);
+    
+    /* Set title on status screen */
+    Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
+            "Playing Title: %s Artist: %s Album: %s",
+            TrackTag.Title, TrackTag.Artist, TrackTag.Album);
+    Globals::Status.SetAttribs(TrackTag);
+    Globals::Display.Update(&Globals::Status);
+    
+    /* Determine audio encoding type and create an instance of the 
+       appropriate decoder */
+    if(strcmp(TrackTag.Codec, "mp3") == 0) {
+        Dec = new Mp3Decoder(ServerConn->GetDescriptor(), &PlaylistAudioOut, this);
+    }
+    else if(strcmp(TrackTag.Codec, "flac") == 0) {
+        Dec = new FlacDecoder(ServerConn->GetDescriptor(), &PlaylistAudioOut, this);
+    }
+    else if(strcmp(TrackTag.Codec, "ogg") == 0) {
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "OGG format is not yet supported");
+        return;
+    }
+    else if(strcmp(TrackTag.Codec, "wma") == 0) {
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "WMA format is not supported (and probably won't ever be)");
+        return;
+    }
+    else {
+        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+                "%s: Unknown codec", Filename);
+        return;
+    }
+    
+    /* Start the decoder process */
+    Dec->Start();
 }

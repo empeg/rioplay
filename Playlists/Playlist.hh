@@ -13,27 +13,51 @@
 #ifndef PLAYLIST_HH
 #define PLAYLIST_HH
 
-#include "Tag.h"
+#include <vector>
+#include "Thread.hh"
+#include "InputSource.hh"
 
-class MenuScreen;
+#define COMMAND_NULL             0
+#define COMMAND_PLAY             1
+#define COMMAND_STOP             2
+#define COMMAND_FORWARD          3
+#define COMMAND_REVERSE          4
+#define COMMAND_DECODER_FINISHED 5
+#define COMMAND_CLEAR            6
 
-class Playlist {
+class PlaylistEntry {
 public:
-    Playlist(void);
-    virtual ~Playlist(void);
-    virtual void Advance(void);
-    virtual void Reverse(void);
-    virtual int GetPosition(void);
-    virtual Tag GetTag(int EntryNumber) = 0;
-    virtual char *GetFilename(char *Filename, int EntryNumber) = 0;
-    virtual void SetMetadata(char *Metadata, int MetadataLength);
-    virtual int CommandHandler(unsigned int Keycode, MenuScreen *ActiveMenu) = 0;
-
-protected:
-    int NumEntries;
-    int Position;
-        
-private:
+    InputSource *Source;
+    unsigned int SourceID;
 };
+
+class PlaylistClass : public Thread {
+public:
+    PlaylistClass(void);
+    ~PlaylistClass(void);
+    void *ThreadMain(void *arg);
     
+    void Enqueue(InputSource *Source, unsigned int SourceID);
+    void Play(void);
+    void DecoderFinished(void);
+    void Stop(bool Block = false);
+    void Forward(void);
+    void Reverse(void);
+    void Clear(void);
+    void Randomize(void);
+/*    bool GetRandom(void);
+    void SetRandom(bool inRandom);
+    bool GetRepeat(void);
+    void SetRepeat(bool inRepeat);*/
+    
+private:
+//    void Dequeue(int InternalID);
+    void RequestCommand(int RequestedCommand, bool Block = false);
+    vector<PlaylistEntry> Entries;
+    vector<PlaylistEntry> PlayedEntries;
+    PlaylistEntry CurrentlyPlayingEntry;
+    pthread_cond_t NullCommandCondition;
+    int Command;
+};
+
 #endif /* #ifndef PLAYLIST_HH */

@@ -1,5 +1,5 @@
 Utils.o: Http.o BufferClass.o MemAlloc.o
-	ld -r -o Utils.o Http.o BufferClass.o MemAlloc.o
+	$(LD) -r -o Utils.o Http.o BufferClass.o MemAlloc.o
     
 Http.o: Http.cc Http.hh
 	$(C++) -c -o Http.o $(CFLAGS) $(INCLUDEDIRS) Http.cc

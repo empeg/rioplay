@@ -20,20 +20,16 @@
 #include <errno.h>
 #include <sys/time.h>
 #include "RemoteThread.hh"
-#include "DisplayThread.hh"
-#include "AudioThread.hh"
 #include "KeyCodes.h"
-#include "RioServerList.hh"
-#include "ShoutcastList.hh"
+#include "RioServerSource.hh"
+#include "ShoutcastSource.hh"
 #include "MenuScreen.hh"
-#include "Commands.h"
 #include "Player.h"
 #include "Log.hh"
+#include "Globals.hh"
+#include "MemAlloc.hh"
 
 extern int errno;
-
-extern DisplayThread Display;
-extern AudioThread Audio;
 
 RemoteThread::RemoteThread(void) {
     PList = NULL;
@@ -41,14 +37,14 @@ RemoteThread::RemoteThread(void) {
     IrFD = -1;
     MixerFD = -1;
     Volume = 45;
-    PlaylistMenuActive = 0;
+    InputSourceMenuActive = 0;
 
     /* Open IR device for input */
     IrFD = open("/dev/ir", O_RDONLY);
     if(IrFD < 0) {
         Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
                 "Could not open IR device");
-        pthread_exit(0);
+        pthread_exit((void *) 1);
     }
     
     /* Open mixer device for output */
@@ -56,19 +52,15 @@ RemoteThread::RemoteThread(void) {
     if(MixerFD < 0) {
         Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
                 "Could not open mixer device");
-        pthread_exit(0);
+        pthread_exit((void *) 1);
     }
     
     SetVolume();
 }
 
 RemoteThread::~RemoteThread(void) {
-    if(PList) {
-        delete PList;
-    }
-    if(TempPList) {
-        delete TempPList;
-    }
+    close(IrFD);
+    close(MixerFD);
 }
 
 void *RemoteThread::ThreadMain(void *arg) {
@@ -81,11 +73,11 @@ void *RemoteThread::ThreadMain(void *arg) {
         
         if(KeyCode == 0) {
             /* Turn off backlight due to timeout */
-            Display.Backlight(DISPLAY_BACKLIGHT_OFF);
+            Globals::Display.Backlight(DISPLAY_BACKLIGHT_OFF);
         }
         else {
             /* Turn on backlight due to keypress */
-            Display.Backlight(DISPLAY_BACKLIGHT_ON);
+            Globals::Display.Backlight(DISPLAY_BACKLIGHT_ON);
         
             switch(KeyCode) {
                 case PANEL_POWER_UP:
@@ -93,24 +85,40 @@ void *RemoteThread::ThreadMain(void *arg) {
                     if((time(NULL) - timer) >= 5) {
                         Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
                                 "Received reboot command");
+                        /* Stop playback (needed for appropriate
+                           thread cleanup) */
+                        /* Argument is true so that this command will
+                           block until playlist is actually stopped */
+                        Globals::Playlist.Stop(true);
+                        
                         /* Turn off LCD */
-                        Display.OnOff(0);
-                        exit(1);
+                        Globals::Display.OnOff(0);
+                        
+                        fflush(stdout);
+                        pthread_exit((void *) 1);
                     }
                     if((time(NULL) - timer) >= 2) {
                         Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
                                 "Received stop app command");
+                        /* Stop playback (needed for appropriate
+                           thread cleanup) */
+                        /* Argument is true so that this command will
+                           block until playlist is actually stopped */
+                        Globals::Playlist.Stop(true);
+                        
                         /* Turn off LCD */
-                        Display.OnOff(0);
-                        exit(0);
+                        Globals::Display.OnOff(0);
+                        
+                        fflush(stdout);
+                        pthread_exit((void *) 0);
                     }
                     /* No break: we want to spill into the next case */
                 case REMOTE_POWER:
                     /* Stop audio playback */
-                    Audio.SetRequestedCommand(COMMAND_STOP);
+                    Globals::Playlist.Stop();
 
                     /* Turn off LCD */
-                    Display.OnOff(0);
+                    Globals::Display.OnOff(0);
 
                     /* Log the power off event */
                     Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
@@ -121,12 +129,8 @@ void *RemoteThread::ThreadMain(void *arg) {
                             (Key != PANEL_POWER_UP); Key = GetKeycode());
                     timer = time(NULL);
 
-                    /* Resume audio */
-                    /* Maybe make this a config option later? */
-                    /*Audio.SetRequestedCommand(COMMAND_PLAY);*/
-
                     /* Turn on LCD */
-                    Display.OnOff(1);
+                    Globals::Display.OnOff(1);
                     break;
 
                 case PANEL_POWER_DOWN:
@@ -138,12 +142,7 @@ void *RemoteThread::ThreadMain(void *arg) {
                 case REMOTE_PLAY:
                 case PANEL_PLAY:
                     /* Set command to play */
-                    if(Audio.GetActualCommand() == COMMAND_PLAY) {
-                        Audio.SetRequestedCommand(COMMAND_PAUSE);
-                    }
-                    else {
-                        Audio.SetRequestedCommand(COMMAND_PLAY);
-                    }
+                    Globals::Playlist.Play();
                     break;
 
                 case REMOTE_VOL_UP:
@@ -162,35 +161,27 @@ void *RemoteThread::ThreadMain(void *arg) {
 
                 case REMOTE_STOP:
                 case PANEL_STOP:
-                    Display.Backlight(0);
                     /* Change requested command */
-                    Audio.SetRequestedCommand(COMMAND_STOP);
+                    Globals::Playlist.Stop();
                     break;
 
                 case REMOTE_FORWARD:
                 case PANEL_FORWARD:
-                    pthread_mutex_lock(&ClassMutex);
-                    if(PList) {
-                        PList->Advance();
-                    }
-                    pthread_mutex_unlock(&ClassMutex);
-
-                    /* Change requested command */
-                    Audio.SetRequestedCommand(COMMAND_CHANGESONG);
+                    /* Advance playlist */
+                    Globals::Playlist.Forward();
                     break;
 
                 case REMOTE_REVERSE:
                 case PANEL_REVERSE:
-                    pthread_mutex_lock(&ClassMutex);
-                    if(PList) {
-                        PList->Reverse();
-                    }
-                    pthread_mutex_unlock(&ClassMutex);
-
-                    /* Change requested command */
-                    Audio.SetRequestedCommand(COMMAND_CHANGESONG);
+                    /* Back up playlist */
+                    Globals::Playlist.Reverse();
                     break;
 
+                case REMOTE_RANDOM:
+                    /* Randomize playlist */
+                    Globals::Playlist.Randomize();
+                    break;
+                    
                 case REMOTE_MENU:
                 case PANEL_MENU:
                 case REMOTE_DOWN:
@@ -201,27 +192,25 @@ void *RemoteThread::ThreadMain(void *arg) {
                 case PANEL_WHEEL_CW:
                 case PANEL_WHEEL_CCW:
                 case PANEL_WHEEL_BUTTON:
-                    if(PlaylistMenuActive == 0) {
+                    if(InputSourceMenuActive == 0) {
                         MenuHandleKeypress(KeyCode);
                     }
-                    if(PlaylistMenuActive != 0) {
+                    if(InputSourceMenuActive != 0) {
                         int TempVal = TempPList->CommandHandler(KeyCode,
                                 &ActiveMenu);
                         if(TempVal == 0) {
-                            PlaylistMenuActive = 0;
-                            delete TempPList;
+                            InputSourceMenuActive = 0;
                             TempPList = NULL;
                         }
                         else if(TempVal == 2) {
-                            PlaylistMenuActive = 0;
+                            Globals::Display.ShowHourglass();
+                            InputSourceMenuActive = 0;
                             pthread_mutex_lock(&ClassMutex);
-                            if(PList != NULL) {
-                                delete PList;
-                            }
                             PList = TempPList;
                             pthread_mutex_unlock(&ClassMutex);
                             TempPList = NULL;
-                            Audio.SetRequestedCommand(COMMAND_CHANGESONG);
+                            Globals::Playlist.Play();
+                            //PList->Play();
                         }
                     }
                     break;
@@ -235,8 +224,8 @@ void *RemoteThread::ThreadMain(void *arg) {
     }
 }
 
-Playlist *RemoteThread::GetPlaylist(void) {
-    Playlist *ReturnVal;
+InputSource *RemoteThread::GetInputSource(void) {
+    InputSource *ReturnVal;
     
     pthread_mutex_lock(&ClassMutex);
     ReturnVal = PList;
@@ -299,20 +288,21 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
             ActiveMenu.ClearOptions();
             ActiveMenu.SetTitle("Audio Receiver");
             ActiveMenu.AddOption("Select Music");
+            ActiveMenu.AddOption("Clear Active Playlist");
             ActiveMenu.AddOption("About Receiver");
             //ActiveMenu.AddOption("Change Audio Settings");
             //ActiveMenu.AddOption("Change Display");
 
             /* Make the menu the active screen */
-            Display.SetTopScreen(&ActiveMenu);
-            Display.Update(&ActiveMenu);
+            Globals::Display.SetTopScreen(&ActiveMenu);
+            Globals::Display.Update(&ActiveMenu);
 
             /* Update current menu */
             CurrentMenu = 1;
         }
         else {
             /* Menu pressed while a menu was displayed - exit menu system */
-            Display.RemoveTopScreen(&ActiveMenu);
+            Globals::Display.RemoveTopScreen(&ActiveMenu);
             CurrentMenu = 0;
         }
         return;
@@ -325,7 +315,7 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
         }
         else {
             ActiveMenu.Advance();
-            Display.Update(&ActiveMenu);
+            Globals::Display.Update(&ActiveMenu);
         }
         return;
     }
@@ -337,18 +327,18 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
         }
         else {
             ActiveMenu.Advance();
-            Display.Update(&ActiveMenu);
+            Globals::Display.Update(&ActiveMenu);
         }
         return;
     }
     else if(KeyCode == REMOTE_DOWN) {
         ActiveMenu.Advance();
-        Display.Update(&ActiveMenu);
+        Globals::Display.Update(&ActiveMenu);
         return;
     }
     else if(KeyCode == REMOTE_UP) {
         ActiveMenu.Reverse();
-        Display.Update(&ActiveMenu);
+        Globals::Display.Update(&ActiveMenu);
         return;
     }
 
@@ -361,10 +351,16 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
                     ActiveMenu.AddOption("Rio Server");
                     ActiveMenu.AddOption("Shoutcast");
                     CurrentMenu = 2;
-                    Display.Update(&ActiveMenu);
+                    Globals::Display.Update(&ActiveMenu);
                     break;
                     
-                case 2: /* About Receiver menu */
+                case 2: /* Clear Active Playlist */
+                    Globals::Playlist.Clear();
+                    Globals::Display.RemoveTopScreen(&ActiveMenu);
+                    CurrentMenu = 0;
+                    break;
+                    
+                case 3: /* About Receiver menu */
                     ActiveMenu.ClearOptions();
                     ActiveMenu.SetTitle("About Receiver");
                     sprintf(TempString, "RioPlay version %s", PLAYER_VER);
@@ -372,7 +368,7 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
                     ActiveMenu.AddOption("written by");
                     ActiveMenu.AddOption("David Flowerday");
                     CurrentMenu = 3;
-                    Display.Update(&ActiveMenu);
+                    Globals::Display.Update(&ActiveMenu);
                     break;
                     
                 default:
@@ -385,20 +381,20 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
             switch(ActiveMenu.GetSelection()) {
                 case 1: /* Select Music selected */
                     pthread_mutex_lock(&ClassMutex);
-                    TempPList = new RioServerList;
+                    TempPList = &Globals::RioServer;
                     pthread_mutex_unlock(&ClassMutex);
 
-                    PlaylistMenuActive = 1;
+                    InputSourceMenuActive = 1;
                     CurrentMenu = 0;
                     break;
                     
                 case 2:
-                    /* Create playlist and exit menu */
+                    /* Create InputSource and exit menu */
                     pthread_mutex_lock(&ClassMutex);
-                    TempPList = new ShoutcastList;
+                    TempPList = &Globals::Shoutcast;
                     pthread_mutex_unlock(&ClassMutex);
                     
-                    PlaylistMenuActive = 1;
+                    InputSourceMenuActive = 1;
                     CurrentMenu = 0;
                     break;
                     
@@ -409,7 +405,7 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
             break;
             
         case 3:
-            Display.RemoveTopScreen(&ActiveMenu);
+            Globals::Display.RemoveTopScreen(&ActiveMenu);
             CurrentMenu = 0;
             break;
     }

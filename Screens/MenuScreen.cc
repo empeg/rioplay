@@ -41,7 +41,7 @@ void MenuScreen::SetTitle(char *NewTitle) {
     Title[63]='\0';
 }
 
-void MenuScreen::AddOption(char *NewOption) {
+void MenuScreen::AddOption(const char *NewOption) {
     if((NumOptions % 5) == 0) {
         Options = (char **) __realloc(Options, sizeof(char *) * (NumOptions + 5));
     }
