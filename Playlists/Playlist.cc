@@ -18,6 +18,7 @@
 #include "KeyCodes.h"
 
 PlaylistClass::PlaylistClass(void) {
+    isPlaying = false;
     CurrentlyPlayingEntry.Source = NULL;
     CurrentlyPlayingEntry.SourceID = 0;
     pthread_cond_init(&NullCommandCondition, NULL);
@@ -90,7 +91,7 @@ void *PlaylistClass::ThreadMain(void *arg) {
                     CurrentlyPlayingEntry.Source->Stop();
                     
                     /* Show hourglass */
-                    Globals::Display.ShowHourglass();
+                    Globals::Display->ShowHourglass();
                     
                     /* Push the song that was just playing on
                        the "played" list */
@@ -235,10 +236,12 @@ void PlaylistClass::RequestCommand(int RequestedCommand, bool Block = false) {
 }
 
 void PlaylistClass::Play(void) {
+    isPlaying = true;
     RequestCommand(COMMAND_PLAY);
 }
 
 void PlaylistClass::Pause(void) {
+    isPlaying = false;
     RequestCommand(COMMAND_PAUSE);
 }
 
@@ -247,6 +250,7 @@ void PlaylistClass::DecoderFinished(void) {
 }
 
 void PlaylistClass::Stop(bool Block = false) {
+    isPlaying = false;
     RequestCommand(COMMAND_STOP, Block);
 }
 
@@ -305,13 +309,13 @@ void PlaylistCommandHandler::Handle(const unsigned long &Keycode) {
     if((Keycode == PANEL_WHEEL_CW) || (Keycode == REMOTE_DOWN) ||
             (Keycode == REMOTE_DOWN_REPEAT)) {
         Menu.Advance();
-        Globals::Display.Update(&Menu);
+        Globals::Display->Update(&Menu);
         return;
     }
     else if((Keycode == PANEL_WHEEL_CCW) || (Keycode == REMOTE_UP) ||
             (Keycode == REMOTE_UP_REPEAT)) {
         Menu.Reverse();
-        Globals::Display.Update(&Menu);
+        Globals::Display->Update(&Menu);
         return;
     }
     
@@ -331,12 +335,12 @@ void PlaylistCommandHandler::Handle(const unsigned long &Keycode) {
             Menu.AddOption((*iter).Title.c_str());
         }
         CurrentMenu = MENU_PLAYLIST;
-        Globals::Display.SetTopScreen(&Menu);
-        Globals::Display.Update(&Menu);
+        Globals::Display->SetTopScreen(&Menu);
+        Globals::Display->Update(&Menu);
         return;
     }
     else {
-        Globals::Display.RemoveTopScreen(&Menu);
+        Globals::Display->RemoveTopScreen(&Menu);
         Globals::Remote.RemoveHandler();
         CurrentMenu = MENU_NONE;
         return;
