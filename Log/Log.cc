@@ -55,9 +55,8 @@ Log *Log::GetInstance(void) {
 }
 
 void Log::Post(int Severity, char *File, int Line, char *Message, ...) {
-    char TempString[1024];
-    char *TempPtr = NULL;
-    char TempChar;
+    int TempStringLength;
+    char *TempString;
     va_list ArgList;
     
     /* Lock the log */
@@ -92,47 +91,14 @@ void Log::Post(int Severity, char *File, int Line, char *Message, ...) {
     InFile[NumEvents] = (char *) __malloc(sizeof(char) * (strlen(File) + 1));
     strcpy(InFile[NumEvents], File);
     
-    /* Prepare to look through optional args */
-    va_start(ArgList, Message);
-    TempPtr = Message;
-    bzero(TempString, 1024);
     /* Build message string */
-    while((TempChar = TempPtr[0]) != '\0') {
-        if(TempChar == '%') {
-            switch(TempPtr[1]) {
-                case 'c':
-                    sprintf(TempString, "%s%c", TempString,
-                            (char) va_arg(ArgList, int));
-                    break;
-
-                case 'd':
-                    sprintf(TempString, "%s%d", TempString,
-                            va_arg(ArgList, int));
-                    break;
-
-                case 's':
-                    sprintf(TempString, "%s%s", TempString,
-                            va_arg(ArgList, char *));
-                    break;
-
-                case 'x':
-                    sprintf(TempString, "%s%x", TempString,
-                            va_arg(ArgList, int));
-                    break;
-
-                default:
-                    break;
-            }
-            TempPtr++;
-        }
-        else {
-            sprintf(TempString, "%s%c", TempString, TempChar);
-        }
-        TempPtr++;
-    }
+    va_start(ArgList, Message);
+    TempString = (char*) __malloc(sizeof(char)*1024); 
+    TempStringLength = vsprintf(TempString, Message, ArgList) + 1;
     va_end(ArgList);
-    MessageLogged[NumEvents] = (char *) __malloc(sizeof(char) * (strlen(TempString) + 1));
-    strcpy(MessageLogged[NumEvents], TempString);
+
+    TempString = (char *) __realloc(TempString, TempStringLength);
+    MessageLogged[NumEvents] = TempString;
 
     printf("%s, Line %d, %s\n", File, Line, TempString);
         
