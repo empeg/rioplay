@@ -40,3 +40,13 @@ Decoder::~Decoder(void) {
 
 void Decoder::SetMetadataFrequency(int Freq) {
 }
+
+void Decoder::SetPause(int pause) {
+    if(pause == 0)
+    {
+    	    Paused = false;
+	    pthread_cond_signal(&ClassCondition);
+    }
+    else if (pause == 1)
+	    Paused = true;
+}
