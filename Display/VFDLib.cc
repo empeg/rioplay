@@ -35,12 +35,12 @@ VFDLib::VFDLib(void) {
     g_clipYBottom = VFD_HEIGHT;
     bzero(&g_fontRegistry, sizeof(FontInfo) * NUM_FONT_SLOTS);
     DisplayMemMap = NULL;
-    registerFont("/empeg/lib/fonts/small.bf", 0);
-    registerFont("/empeg/lib/fonts/medium.bf", 1);
-    registerFont("/empeg/lib/fonts/timecode.bf", 2);
+    registerFont("/empeg/lib/fonts/small.bf", VFD_FONT_SMALL);
+    registerFont("/empeg/lib/fonts/medium.bf", VFD_FONT_MEDIUM);
+    registerFont("/empeg/lib/fonts/timecode.bf", VFD_FONT_TIME);
 }
 
-VFDLib::~VFDLib(void) {}
+VFDLib::~VFDLib(void) {unregisterAllFonts();}
 
 void VFDLib::setBuffer(char *inDisplayMemMap) {
     DisplayMemMap = inDisplayMemMap;
