@@ -25,6 +25,8 @@
 extern int errno;
 
 AudioOutputDevice::AudioOutputDevice(void) {
+    /* Initialize member variables */
+    
     /* Open the audio device for output */
     AudioFD = open("/dev/audio", O_WRONLY);
     if (AudioFD < 0) {
@@ -56,9 +58,9 @@ AudioOutputDevice::~AudioOutputDevice(void) {
 void AudioOutputDevice::Play(const mad_fixed_t *Left, const mad_fixed_t *Right,
         unsigned int NumSamples) {
     //signed int LeftSample, RightSample;
+    static int SamplePos = 0;
     signed int LeftSample, RightSample;
     mad_fixed_t *Resampled[2] = {NULL, NULL};
-    static int SamplePos = 0;
     int i;
     int NumNewSamples;
     const mad_fixed_t *Samples[2];
@@ -106,6 +108,21 @@ void AudioOutputDevice::Play(const mad_fixed_t *Left, const mad_fixed_t *Right,
         __free(Resampled[1]);
     }
 }
+
+void AudioOutputDevice::Play(const char *Data, unsigned int Size) {
+    static int SamplePos = 0;
+    
+    for(unsigned int i = 0; i < Size; i++) {
+        OutputBuffer[SamplePos++] = Data[i];
+        if(SamplePos == 4608) {
+            /* Buffer full, write it to the audio device */
+            write(AudioFD, OutputBuffer, 4608);
+
+            /* Reset position in static sample buffer */
+            SamplePos = 0;
+        }
+    }
+}            
 
 unsigned int AudioOutputDevice::ResampleBlock(unsigned int NumSamples,
         mad_fixed_t const *OrigSamples, mad_fixed_t *NewSamples) {

@@ -41,6 +41,7 @@ public:
     void SetBitsPerSample(int inBitsPerSample);
     void Play(const mad_fixed_t *Left, const mad_fixed_t *Right,
             unsigned int NumSamples);
+    void Play(const char *Data, unsigned int Size);
     void Flush(void);
     void SetVolume(int inVolume);
     int GetVolume(void);

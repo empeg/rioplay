@@ -27,6 +27,7 @@
 #include "Globals.hh"
 #include "Mp3Decoder.hh"
 #include "FlacDecoder.hh"
+#include "VorbisDecoder.hh"
 #include "CommandHandler.hh"
 #include "MemAlloc.hh"
 
@@ -510,9 +511,7 @@ void RioServerSource::Play(unsigned int ID) {
         Dec = new FlacDecoder(ServerConn->GetDescriptor(), &Globals::AudioOut, this);
     }
     else if(strcmp(TrackTag.Codec, "ogg") == 0) {
-        Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
-                "OGG format is not yet supported");
-        return;
+        Dec = new VorbisDecoder(ServerConn->GetDescriptor(), &Globals::AudioOut, this);
     }
     else if(strcmp(TrackTag.Codec, "wma") == 0) {
         Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
