@@ -24,11 +24,21 @@ int main(void) {
     int ReturnVal;
     pid_t RioplayPID;
     int status;
+    char *ntpargs[] = {"-b", "130.126.24.24", NULL};
 
     if(mount("none", "/proc", "proc", 0, NULL) != 0) {
         perror("mount");
     }
-        
+
+    if(fork() == 0) {
+        /* This is the child process */
+        /* Run the ntpdate program to sync the clock */
+        if(execve("/bin/ntpdate", ntpargs, NULL) < 0) {
+            perror("ntpdate");
+            exit(0);
+        }
+    }
+    
     while(1) {
         ReturnVal = 0;
         RioplayPID = fork();
