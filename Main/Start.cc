@@ -47,30 +47,29 @@ int main() {
     char    hwname[32];
     FILE    *fp;
 
-    
     /* Print startup message */
     printf("\n\n");
     printf("RioPlay version %s (%s) started\n", PLAYER_VER, PLAYER_DATE);
     printf("%s\n", PLAYER_COPYRIGHT);
     printf("Please see %s for more information\n\n", PLAYER_WEBADDR);
 
-
     /* Determine what hardware platform we're running on. */
-
     Globals::hw_type = HWTYP_RIORCV;	/* Default to receiver */
     strcpy(hwname, HWNM_RIORCV);
     
-    fp=fopen(IDFILE, "rb");
-    while (fgets(s,sizeof(s), fp) != NULL) {
+    fp = fopen(IDFILE, "rb");
+    if(fp != NULL) {
+        while (fgets(s,sizeof(s), fp) != NULL) {
             s[strlen(s)-1]='\0';
-	    if (strstr(s, "drives:") != NULL)
-	    {   /* only the empeg has the "drives" parameter */
-	    	Globals::hw_type = HWTYP_EMPEG;
-		strcpy(hwname, HWNM_EMPEG);
-		break;
-	    }
+            if (strstr(s, "drives:") != NULL) {
+                /* only the empeg has the "drives" parameter */
+                Globals::hw_type = HWTYP_EMPEG;
+                strcpy(hwname, HWNM_EMPEG);
+                break;
+            }
+        }
+        fclose(fp);
     }
-    fclose(fp);
     	
     printf("Hardware Platform: %s\n\n", hwname); 
 
@@ -78,12 +77,13 @@ int main() {
     Globals::Status = new StatusScreen; 
 
     /* Do hardware dependent setup here */
-    if (Globals::hw_type == HWTYP_RIORCV)
-	Globals::AudioOut = new RioReceiverAudio;
+    if (Globals::hw_type == HWTYP_RIORCV) {
+        Globals::AudioOut = new RioReceiverAudio;
+    }
     else if (Globals::hw_type == HWTYP_EMPEG)
     {
-    	    Globals::AudioOut = new EmpegAudio;
-	    Globals::Empeg = new EmpegSource;
+        Globals::AudioOut = new EmpegAudio;
+        Globals::Empeg = new EmpegSource;
     }
     
     /* Create Playlist thread */
@@ -103,11 +103,18 @@ int main() {
     
     printf("Main: Main thread exiting (exit status %d)\n", ReturnVal);
 
-    if (Globals::Empeg) delete Globals::Empeg;
-    if (Globals::AudioOut) delete Globals::AudioOut;
-    //should we delete these too for fear of memory leaks?
-    //if (Globals::Status) delete Globals::Status;
-    //if (Globals::Display) delete Globals::Display;
+    if (Globals::Empeg) {
+        delete Globals::Empeg;
+    }
+    if (Globals::AudioOut) {
+        delete Globals::AudioOut;
+    }
+    if (Globals::Status) {
+        delete Globals::Status;
+    }
+    if (Globals::Display) {
+        delete Globals::Display;
+    }
     
     return ReturnVal;
 }
