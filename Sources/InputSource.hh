@@ -16,7 +16,6 @@
 #include <pthread.h>
 #include "Tag.h"
 #include "Decoder.hh"
-#include "AudioOutputDevice.hh"
 #include "Http.hh"
 
 class MenuScreen;

@@ -34,7 +34,6 @@ public:
 protected:
     bool Paused, Stop;
     int SongFD;
-    AudioOutputDevice *AudioOut;
     InputSource *PList;
     BufferClass *ExtBuffer;
     int Reason;

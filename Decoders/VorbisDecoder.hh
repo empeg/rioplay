@@ -28,7 +28,7 @@ class BufferClass;
 
 class VorbisDecoder : public Decoder {
 public:
-    VorbisDecoder(int inInputFD, AudioOutputDevice *inAudioDev, InputSource *inPList);
+    VorbisDecoder(int inInputFD, InputSource *inPList);
     ~VorbisDecoder(void);
     virtual void *ThreadMain(void *arg);
     size_t ReadCallback(void *ptr, size_t size, size_t nmemb, void *datasource);

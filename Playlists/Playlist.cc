@@ -307,17 +307,14 @@ void PlaylistCommandHandler::Handle(const unsigned long &Keycode) {
     if(CurrentMenu == MENU_NONE) {
         Menu.ClearOptions();
         Menu.SetTitle("Active Playlist");
-        printf("1\n");
         for(iter = PList->PlayedEntries.begin();
                 iter < PList->PlayedEntries.end(); iter++) {
             Menu.AddOption((*iter).Title.c_str());
         }
-        printf("2\n");
         if(PList->CurrentlyPlayingEntry.Source != NULL) {
             Menu.AddOption(PList->CurrentlyPlayingEntry.Title.c_str());
             Menu.SetSelection(PList->PlayedEntries.size() + 1);
         }
-        printf("3\n");
         for(iter = PList->Entries.begin(); iter < PList->Entries.end();
                 iter++) {
             Menu.AddOption((*iter).Title.c_str());

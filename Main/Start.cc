@@ -17,6 +17,7 @@
 #include "Player.h"
 #include "Log.hh"
 #include "Globals.hh"
+#include "RioReceiverAudio.hh"
 #include "MemAlloc.hh"
 
 /* MemAlloc class needs to be declared first so it is destroyed last */
@@ -30,9 +31,9 @@ RemoteThread Globals::Remote;
 WebThread Globals::Web;
 StatusScreen Globals::Status;
 PlaylistClass Globals::Playlist;
+AudioOutputDevice *Globals::AudioOut = NULL;
 RioServerSource Globals::RioServer;
 ShoutcastSource Globals::Shoutcast;
-AudioOutputDevice Globals::AudioOut;
 Log DummyLog;
 
 int main() {
@@ -44,6 +45,9 @@ int main() {
     printf("%s\n", PLAYER_COPYRIGHT);
     printf("Please see %s for more information\n\n", PLAYER_WEBADDR);
 
+    /* Do hardware dependent setup here */
+    Globals::AudioOut = new RioReceiverAudio;
+    
     /* Create Playlist thread */
     Globals::Playlist.Start();
         

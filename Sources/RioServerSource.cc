@@ -437,6 +437,13 @@ void RioCommandHandler::Handle(const unsigned long &Keycode) {
             
         case MENU_SELECTFROMGROUP:
             Globals::Display.ShowHourglass();
+            
+            /* Clear the playlist if the user used the "Play" button
+               (leave the playlist intact if "Enter" was used) */
+            if((Keycode == REMOTE_PLAY) || (Keycode == PANEL_PLAY)) {
+                Globals::Playlist.Clear();
+            }
+            
             Selection = Menu.GetSelection();
             if(Selection > 1) {
                 HttpConnection::UrlEncode(Rio->List[Selection - 2]);
@@ -458,6 +465,12 @@ void RioCommandHandler::Handle(const unsigned long &Keycode) {
             break;
             
         case MENU_PLAYLIST:
+            /* Clear the playlist if the user used the "Play" button
+               (leave the playlist intact if "Enter" was used) */
+            if((Keycode == REMOTE_PLAY) || (Keycode == PANEL_PLAY)) {
+                Globals::Playlist.Clear();
+            }
+            
             IDiter = Rio->SongList.begin();
             /* Seems like there should be a better way to do this */
             for(int i = 0; i < (Menu.GetSelection() - 1); i++) {
@@ -505,13 +518,13 @@ void RioServerSource::Play(unsigned int ID) {
     /* Determine audio encoding type and create an instance of the 
        appropriate decoder */
     if(strcmp(TrackTag.Codec, "mp3") == 0) {
-        Dec = new Mp3Decoder(ServerConn->GetDescriptor(), &Globals::AudioOut, this);
+        Dec = new Mp3Decoder(ServerConn->GetDescriptor(), this);
     }
     else if(strcmp(TrackTag.Codec, "flac") == 0) {
-        Dec = new FlacDecoder(ServerConn->GetDescriptor(), &Globals::AudioOut, this);
+        Dec = new FlacDecoder(ServerConn->GetDescriptor(), this);
     }
     else if(strcmp(TrackTag.Codec, "ogg") == 0) {
-        Dec = new VorbisDecoder(ServerConn->GetDescriptor(), &Globals::AudioOut, this);
+        Dec = new VorbisDecoder(ServerConn->GetDescriptor(), this);
     }
     else if(strcmp(TrackTag.Codec, "wma") == 0) {
         Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,

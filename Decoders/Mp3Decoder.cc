@@ -35,8 +35,7 @@ enum mad_flow InputCallbackJump(void *ptr, struct mad_stream *stream);
 enum mad_flow OutputCallbackJump(void *ptr, struct mad_header const *header, struct mad_pcm *pcm);
 enum mad_flow ErrorCallbackJump(void *ptr, struct mad_stream *stream, struct mad_frame *frame);
 
-Mp3Decoder::Mp3Decoder(int inInputFD, AudioOutputDevice *inAudioOut,
-        InputSource *inPList) {
+Mp3Decoder::Mp3Decoder(int inInputFD, InputSource *inPList) {
     /* Initialize class variables */
     SongFD = -1;
     CurrentTime.seconds = 0;
@@ -48,7 +47,6 @@ Mp3Decoder::Mp3Decoder(int inInputFD, AudioOutputDevice *inAudioOut,
     
     Buffer = (unsigned char *) __malloc(BufferSize);
     
-    AudioOut = inAudioOut;
     PList = inPList;
     SongFD = inInputFD;
     MadCallbackDecoder = this;
@@ -94,7 +92,7 @@ void *Mp3Decoder::ThreadMain(void *arg) {
     }
 
     /* Set up output device */
-    AudioOut->SetBitsPerSample(MAD_F_FRACBITS);
+    Globals::AudioOut->SetBitsPerSample(MAD_F_FRACBITS);
     
     /* Decode and play the audio */
     mad_decoder_run(&MadDecoder, MAD_DECODER_MODE_SYNC);
@@ -234,13 +232,13 @@ enum mad_flow Mp3Decoder::OutputCallback(void *ptr,
     if(Stop == true) {
         pthread_mutex_unlock(&ClassMutex);
         Reason = REASON_STOP_REQUESTED;
-        AudioOut->Flush();
+        Globals::AudioOut->Flush();
         return MAD_FLOW_STOP;
     }
     pthread_mutex_unlock(&ClassMutex);
     
     /* Configure output device to correct sample rate */
-    AudioOut->SetSampleRate(pcm->samplerate);
+    Globals::AudioOut->SetSampleRate(pcm->samplerate);
     
     Left = pcm->samples[0];
     Right = pcm->samples[1];
@@ -257,7 +255,7 @@ enum mad_flow Mp3Decoder::OutputCallback(void *ptr,
     pthread_mutex_unlock(&ClassMutex);
 
     /* Play the decoded samples */
-    AudioOut->Play(Left, Right, pcm->length);
+    Globals::AudioOut->Play(Left, Right, pcm->length);
 
     /* Lock */
     pthread_mutex_lock(&ClassMutex);

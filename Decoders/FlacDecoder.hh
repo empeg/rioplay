@@ -27,7 +27,7 @@ class BufferClass;
 
 class FlacDecoder : public Decoder {
 public:
-    FlacDecoder(int inInputFD, AudioOutputDevice *inAudioDev, InputSource *inPList);
+    FlacDecoder(int inInputFD, InputSource *inPList);
     ~FlacDecoder(void);
     virtual void *ThreadMain(void *arg);
     

@@ -27,7 +27,7 @@ class BufferClass;
 
 class Mp3Decoder : public Decoder {
 public:
-    Mp3Decoder(int inInputFD, AudioOutputDevice *inAudioDev, InputSource *inPList);
+    Mp3Decoder(int inInputFD, InputSource *inPList);
     ~Mp3Decoder(void);
     virtual void *ThreadMain(void *arg);
     void SetMetadataFrequency(int Freq);

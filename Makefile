@@ -26,7 +26,7 @@ OBJS = Main/Main.o \
        Sources/Sources.o \
        Playlists/Playlist.o \
        /skiff/local/arm-linux/lib/libpthread.a
-export CFLAGS = -O3 -Wall -D_REENTRANT
+export CFLAGS = -O3 -Wall -D_REENTRANT -mtune=arm7tdmi -march=armv4
 export CC = @gcc
 export C++ = @g++
 export LD = @ld

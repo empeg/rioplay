@@ -34,8 +34,7 @@ size_t ReadCallbackJump(void *ptr, size_t size, size_t nmemb, void *datasource);
 int SeekCallbackJump(void *datasource, ogg_int64_t offset, int whence);
 int CloseCallbackJump(void *datasource);
 
-VorbisDecoder::VorbisDecoder(int inInputFD, AudioOutputDevice *inAudioOut,
-        InputSource *inPList) {
+VorbisDecoder::VorbisDecoder(int inInputFD, InputSource *inPList) {
     /* Initialize class variables */
     BufferSize = BUFFER_SIZE;
     ExtBuffer = NULL;
@@ -43,7 +42,6 @@ VorbisDecoder::VorbisDecoder(int inInputFD, AudioOutputDevice *inAudioOut,
     
     Buffer = (unsigned char *) __malloc(BufferSize);
     
-    AudioOut = inAudioOut;
     PList = inPList;
     SongFD = inInputFD;
     
@@ -52,23 +50,6 @@ VorbisDecoder::VorbisDecoder(int inInputFD, AudioOutputDevice *inAudioOut,
     Callbacks.seek_func = SeekCallbackJump;
     Callbacks.close_func = CloseCallbackJump;
     Callbacks.tell_func = NULL;
-
-    /* Set up external buffer thread */
-    printf("Creating new buffer\n");
-    ExtBuffer = new BufferClass(SongFD, 163680);
-    
-    /* Fill the buffer before we start playback */
-    printf("Prebuffering\n");
-    ExtBuffer->Prebuffer();
-    printf("Done\n");
-
-    printf("@@@@@ VorbisDecoder init\n");
-        
-    if (ov_open_callbacks(stdin, &vf, NULL, 0, Callbacks) < 0) {
-        fprintf(stderr, "Input does not appear to be an Ogg bitstream.\n");
-    }
-    
-    printf("@@@@@ Finished opening\n");
 }    
 
 VorbisDecoder::~VorbisDecoder(void) {
@@ -79,9 +60,6 @@ VorbisDecoder::~VorbisDecoder(void) {
     
     /* Wait until decoding thread exits */
     pthread_join(ThreadHandle, NULL);
-
-    /* cleanup */
-    ov_clear(&vf);
     
     __free(Buffer);
 }
@@ -93,6 +71,16 @@ void *VorbisDecoder::ThreadMain(void *arg) {
     static int LastTime = 0;
     int TempTime;
     bool TempStop;
+    
+    /* Set up external buffer thread */
+    ExtBuffer = new BufferClass(SongFD, 81920);
+    
+    /* Fill the buffer before we start playback */
+    ExtBuffer->Prebuffer();
+        
+    if (ov_open_callbacks(stdin, &vf, NULL, 0, Callbacks) < 0) {
+        fprintf(stderr, "Input does not appear to be an Ogg bitstream.\n");
+    }
     
     /* Throw the comments plus a few lines about the bitstream we're
        decoding */
@@ -124,15 +112,15 @@ void *VorbisDecoder::ThreadMain(void *arg) {
         else if(TempStop == true) {
             /* Stop command received */
             Reason = REASON_STOP_REQUESTED;
-            AudioOut->Flush();
+            Globals::AudioOut->Flush();
             eof = 1;
         }
         else {
             /* Configure output device to correct sample rate */
-            AudioOut->SetSampleRate(ov_info(&vf, -1)->rate);
+            Globals::AudioOut->SetSampleRate(ov_info(&vf, -1)->rate);
 
             /* Play the decoded samples */
-            AudioOut->Play(pcmout, ret);
+            Globals::AudioOut->Play(pcmout, ret);
 
             /* Update time display */
             TempTime = ov_pcm_tell(&vf) / ov_info(&vf, -1)->rate;
@@ -144,6 +132,25 @@ void *VorbisDecoder::ThreadMain(void *arg) {
                 Globals::Display.Update(&Globals::Status);
             }
         }
+    }
+
+    /* cleanup */
+    ov_clear(&vf);
+    
+    Log::GetInstance()->Post(LOG_INFO, __FILE__, __LINE__,
+            "Vorbis decoder finished");
+
+    /* Close Audio file */
+    delete ExtBuffer;
+    ExtBuffer = NULL;
+
+    Globals::Status.SetTime(0, 0);
+    Globals::Display.Update(&Globals::Status);
+    
+     /* Signal our input source that we're done decoding */
+    if(Reason != REASON_STOP_REQUESTED) {
+        /* If the stop was requested then we don't want to signal */
+        PList->DecoderFinished();
     }
 
     return NULL;

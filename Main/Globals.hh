@@ -21,7 +21,7 @@
 
 class Globals {
 public:
-    static AudioOutputDevice AudioOut;
+    static AudioOutputDevice *AudioOut;
     static DisplayThread Display;
     static RemoteThread Remote;
     static WebThread Web;

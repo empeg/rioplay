@@ -35,8 +35,7 @@ FLAC__StreamDecoderWriteStatus OutputCallbackJump(const FLAC__StreamDecoder *dec
 void ErrorCallbackJump(const FLAC__StreamDecoder *decoder, FLAC__StreamDecoderErrorStatus status, void *client_data);
 void MetadataCallbackJump(const FLAC__StreamDecoder *decoder, const FLAC__StreamMetadata *metadata, void *client_data);
 
-FlacDecoder::FlacDecoder(int inInputFD, AudioOutputDevice *inAudioOut,
-        InputSource *inPList) {
+FlacDecoder::FlacDecoder(int inInputFD, InputSource *inPList) {
     /* Initialize class variables */
     MetadataFrequency = 0;
     BufferSize = BUFFER_SIZE;
@@ -44,7 +43,6 @@ FlacDecoder::FlacDecoder(int inInputFD, AudioOutputDevice *inAudioOut,
     
     Buffer = (unsigned char *) __malloc(BufferSize);
     
-    AudioOut = inAudioOut;
     PList = inPList;
     SongFD = inInputFD;
     FlacCallbackDecoder = this;
@@ -139,14 +137,15 @@ FLAC__StreamDecoderWriteStatus FlacDecoder::OutputCallback(
     pthread_mutex_lock(&ClassMutex);
     if(Stop == true) {
         pthread_mutex_unlock(&ClassMutex);
+        Globals::AudioOut->Flush();
         Reason = REASON_STOP_REQUESTED;
         return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
     }
     pthread_mutex_unlock(&ClassMutex);
     
     /* Configure output device to correct sample rate */
-    AudioOut->SetSampleRate(frame->header.sample_rate);
-    AudioOut->SetBitsPerSample(frame->header.bits_per_sample);
+    Globals::AudioOut->SetSampleRate(frame->header.sample_rate);
+    Globals::AudioOut->SetBitsPerSample(frame->header.bits_per_sample);
 
     Left = (mad_fixed_t *) buffer[0];
     Right = (mad_fixed_t *) buffer[1];
@@ -163,7 +162,7 @@ FLAC__StreamDecoderWriteStatus FlacDecoder::OutputCallback(
     pthread_mutex_unlock(&ClassMutex);
 
     /* Play the decoded samples */
-    AudioOut->Play(Left, Right, frame->header.blocksize);
+    Globals::AudioOut->Play(Left, Right, frame->header.blocksize);
 
     pthread_mutex_lock(&ClassMutex);
     

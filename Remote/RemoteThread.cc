@@ -128,20 +128,26 @@ void *RemoteThread::ThreadMain(void *arg) {
 
                 case REMOTE_PLAY:
                 case PANEL_PLAY:
-                    /* Set command to play */
-                    Globals::Playlist.Play();
+                    /* Check to see if a custom handler is installed 
+                       that should be called */
+                    if(CustomHandler != NULL) {
+                        CustomHandler->Handle(KeyCode);
+                    }
+                    else {
+                        Globals::Playlist.Play();
+                    }
                     break;
 
                 case REMOTE_VOL_UP:
                 case REMOTE_VOL_UP_REPEAT:
-                    Globals::AudioOut.SetVolume(
-                            Globals::AudioOut.GetVolume() + 2);
+                    Globals::AudioOut->SetVolume(
+                            Globals::AudioOut->GetVolume() + 2);
                     break;
 
                 case REMOTE_VOL_DOWN:
                 case REMOTE_VOL_DOWN_REPEAT:
-                    Globals::AudioOut.SetVolume(
-                            Globals::AudioOut.GetVolume() - 2);
+                    Globals::AudioOut->SetVolume(
+                            Globals::AudioOut->GetVolume() - 2);
                     break;
 
                 case REMOTE_STOP:
@@ -292,7 +298,7 @@ void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
     }
     else if(KeyCode == PANEL_WHEEL_CW) {
         if(CurrentMenu == MENU_NONE) {
-            Globals::AudioOut.SetVolume(Globals::AudioOut.GetVolume() + 2);
+            Globals::AudioOut->SetVolume(Globals::AudioOut->GetVolume() + 2);
         }
         else {
             ActiveMenu.Advance();
@@ -302,7 +308,7 @@ void RemoteCommandHandler::Handle(const unsigned long &KeyCode) {
     }
     else if(KeyCode == PANEL_WHEEL_CCW) {
         if(CurrentMenu == MENU_NONE) {
-            Globals::AudioOut.SetVolume(Globals::AudioOut.GetVolume() - 2);
+            Globals::AudioOut->SetVolume(Globals::AudioOut->GetVolume() - 2);
         }
         else {
             ActiveMenu.Advance();

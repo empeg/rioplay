@@ -208,6 +208,13 @@ void ShoutcastCommandHandler::Handle(const unsigned long &Keycode) {
         case MENU_STREAM: /* Stream selection menu */
             Shoutcast->UrlPosition = 1;
             CurrentMenu = MENU_NONE;
+            
+            /* Clear the playlist if the user used the "Play" button
+               (leave the playlist intact if "Enter" was used) */
+            if((Keycode == REMOTE_PLAY) || (Keycode == PANEL_PLAY)) {
+                Globals::Playlist.Clear();
+            }
+            
             Globals::Playlist.Enqueue(Shoutcast, Menu.GetSelection(), 
                     string(Shoutcast->StreamNames[Menu.GetSelection() - 1]));
             Globals::Playlist.Play();
@@ -233,7 +240,7 @@ void ShoutcastSource::Play(unsigned int ID) {
     if(Dec) {
         delete Dec;
     }
-    Dec = new Mp3Decoder(ServerConn->GetDescriptor(), &Globals::AudioOut, this);
+    Dec = new Mp3Decoder(ServerConn->GetDescriptor(), this);
     Dec->SetMetadataFrequency(MetadataFrequency);
     Dec->Start();
 }
