@@ -16,7 +16,6 @@
 #include <string.h>
 #include "MenuScreen.hh"
 #include "MemAlloc.hh"
-#include "Globals.hh"
 
 MenuScreen::MenuScreen(void) {
     Title[0] = '\0';
@@ -131,7 +130,7 @@ void MenuScreen::Update(VFDLib &Display) {
     int StringHeight = Display.getTextHeight(vfd_default_font);
 
     /* Empegs have smaller screen real estate, so fewer menus */
-    if (Globals::hw_type == HWTYP_EMPEG)
+    if (vfd_height < 64)
 	    MaxMenus = 3;
 
     /* Set clip area to the whole screen */
@@ -150,7 +149,7 @@ void MenuScreen::Update(VFDLib &Display) {
     
     /* Draw Border */
     if ((NumOptions < MaxMenus) || 
-	(Globals::hw_type != HWTYP_EMPEG)) /* Border blocks big menus */  
+	(vfd_height >= 64)) /* Border blocks big menus */  
     	    Display.drawLineHorizClipped(vfd_height-1, 0, vfd_width-1, 
 	    VFDSHADE_BRIGHT);
     Display.drawLineVertClipped(0, 0, vfd_height-1, VFDSHADE_BRIGHT);
@@ -158,7 +157,7 @@ void MenuScreen::Update(VFDLib &Display) {
 
     /* Change clipping area */
     if ((NumOptions < MaxMenus) || 
-	(Globals::hw_type != HWTYP_EMPEG)) /* Clipping blocks big menus */  
+	(vfd_height >= 64)) /* Clipping blocks big menus */  
       Display.setClipArea(3, StringHeight + 3, vfd_width-3, vfd_height-3);
     else /* allow for a little more room on shorter displays */
       Display.setClipArea(3, StringHeight + 3, vfd_width-3, vfd_height);

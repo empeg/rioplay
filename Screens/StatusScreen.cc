@@ -45,7 +45,7 @@ void StatusScreen::Update(VFDLib &Display) {
 
     pthread_mutex_lock(&ClassMutex);
 
-    if (Globals::hw_type == HWTYP_EMPEG) /* Empeg can't fit time font here */
+    if (vfd_height < 64) /* Empeg can't fit time font here */
 	    vfd_font_time = vfd_default_font;
     
     /* Set clipping area */
@@ -80,7 +80,7 @@ void StatusScreen::Update(VFDLib &Display) {
     timeX = vfd_width - BORDER_INFO - 
 		Display.getTextWidth(TimeString, vfd_font_time);
 
-    if (Globals::hw_type == HWTYP_EMPEG) /* Put time alongside album */ 
+    if (vfd_height < 64) /* Put time alongside album */ 
 	timeY = CurrentHeight;
     else /* Put time at bottom right */
 	timeY = vfd_height - 2 - Display.getTextHeight(vfd_font_time);
@@ -91,7 +91,7 @@ void StatusScreen::Update(VFDLib &Display) {
 
     Display.drawText(TimeString, timeX, timeY, vfd_font_time, -1);
     
-    if (Globals::hw_type == HWTYP_EMPEG) 
+    if (vfd_height < 64) 
     { /* Put "Random" above time */
     	randomX = vfd_width - BORDER_INFO - 
 	   Display.getTextWidth(randomText, VFD_FONT_SMALL);
