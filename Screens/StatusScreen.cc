@@ -31,10 +31,12 @@ StatusScreen::~StatusScreen(void) {
 
 
 void StatusScreen::Update(VFDLib &Display) {
+    int StringHeight = Display.getTextHeight(VFD_DEFAULT_FONT);
+    int CurrentHeight = 0;
     pthread_mutex_lock(&ClassMutex);
     
     /* Set clipping area */
-    Display.setClipArea(0, 0, 128, 64);
+    Display.setClipArea(0, 0, VFD_WIDTH, VFD_HEIGHT);
     
     if(TitleArtistChanged == true) {
         Display.clear(VFDSHADE_BLACK);
@@ -42,26 +44,42 @@ void StatusScreen::Update(VFDLib &Display) {
     }
     
     /* Display title, artist, and album */
-    Display.drawText(Title, 0, 5, 1, -1);
-    Display.drawLineHorizClipped(15, 0, 128, -1);
-    Display.drawText(Artist, 0, 17, 1, -1);
-    Display.drawText(Album, 0, 27, 1, -1);
+    /* We supply a common border to seperate the lines of text, and compute the y-axis
+     * based on this, to allow for differences in font height across various platforms.
+     */
+    #define BORDER_INFO 3
+    CurrentHeight = BORDER_INFO;
+    Display.drawText(Title, 0, CurrentHeight, VFD_DEFAULT_FONT, -1);
+    
+    CurrentHeight += BORDER_INFO + StringHeight;
+    Display.drawLineHorizClipped(CurrentHeight, 0, VFD_WIDTH, -1);
+
+    CurrentHeight += BORDER_INFO + 1; /* '1' is the height of the horizontal line */
+    Display.drawText(Artist, 0, CurrentHeight, VFD_DEFAULT_FONT, -1);
+
+    CurrentHeight += BORDER_INFO + StringHeight;
+    Display.drawText(Album, 0, CurrentHeight, VFD_DEFAULT_FONT, -1);
         
     /* Display elapsed time */
     char TimeString[9];
     sprintf(TimeString, "%d:%02d", Minutes, Seconds);
-    Display.drawSolidRectangleClipped(64, 62 - Display.getTextHeight(2),
-            128, 64, VFDSHADE_BLACK);
-    Display.drawText(TimeString, 126 - Display.getTextWidth(TimeString, 2),
-            62 - Display.getTextHeight(2), 2, -1);
+
+    /* Here we black out the area behind the track time */
+    Display.drawSolidRectangleClipped(VFD_WIDTH-2 - Display.getTextWidth(TimeString, VFD_FONT_TIME), 
+		VFD_HEIGHT-2 - Display.getTextHeight(VFD_FONT_TIME),
+            	VFD_WIDTH, VFD_HEIGHT, VFDSHADE_BLACK);
+
+    Display.drawText(TimeString, VFD_WIDTH-2 - Display.getTextWidth(TimeString, VFD_FONT_TIME),
+            VFD_HEIGHT-2 - Display.getTextHeight(VFD_FONT_TIME), VFD_FONT_TIME, -1);
     
     /* Show random status */
     if(Globals::Playlist.GetRandom() == true) {
-        Display.drawText("RANDOM", 1, 62 - Display.getTextHeight(0), 0, -1);
+        Display.drawText("RANDOM", 1, VFD_HEIGHT-2 - Display.getTextHeight(VFD_FONT_SMALL), 
+		VFD_FONT_SMALL, -1);
     }
     else {
-        Display.drawSolidRectangleClipped(0, 62 - Display.getTextHeight(0) - 1,
-                Display.getTextWidth("RANDOM", 0) + 2, 64, VFDSHADE_BLACK);
+        Display.drawSolidRectangleClipped(0, VFD_HEIGHT-2 - Display.getTextHeight(VFD_FONT_SMALL) - 1,
+                Display.getTextWidth("RANDOM", VFD_FONT_SMALL) + 2, VFD_HEIGHT, VFDSHADE_BLACK);
     }
     
     pthread_mutex_unlock(&ClassMutex);
