@@ -14,8 +14,8 @@
 #define PLAYER_H
 
 /* Global defines */
-#define PLAYER_VER "0.23"
-#define PLAYER_DATE "07-04-2002"
+#define PLAYER_VER "0.24"
+#define PLAYER_DATE "07-10-2002"
 #define PLAYER_COPYRIGHT "Copyright 2002 by David Flowerday"
 #define PLAYER_WEBADDR "http://www.pier13.com/rioplay/"
 

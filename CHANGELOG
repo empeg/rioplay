@@ -1,0 +1,6 @@
+Version 0.24 (07/11/02)
+    - Knob on front panel now is used to scroll up and down in menus
+    - streams.cfg supported in both Unix and DOS text file formats
+    
+Version 0.23 (07/04/02)
+    - Initial release

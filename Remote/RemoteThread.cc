@@ -124,7 +124,6 @@ void *RemoteThread::ThreadMain(void *arg) {
 
             case REMOTE_VOL_UP:
             case REMOTE_VOL_UP_REPEAT:
-            case PANEL_VOL_UP:
                 Volume += 2;
                 SetVolume();
                 printf("Remote: Volume is now %d\n", Volume);
@@ -132,7 +131,6 @@ void *RemoteThread::ThreadMain(void *arg) {
                 
             case REMOTE_VOL_DOWN:
             case REMOTE_VOL_DOWN_REPEAT:
-            case PANEL_VOL_DOWN:
                 Volume -= 2;
                 SetVolume();
                 printf("Remote: Volume is now %d\n", Volume);
@@ -175,6 +173,9 @@ void *RemoteThread::ThreadMain(void *arg) {
             case REMOTE_DOWN_REPEAT:
             case REMOTE_UP_REPEAT:
             case REMOTE_ENTER:
+            case PANEL_WHEEL_CW:
+            case PANEL_WHEEL_CCW:
+            case PANEL_WHEEL_BUTTON:
                 if(PlaylistMenuActive == 0) {
                     MenuHandleKeypress(KeyCode);
                 }
@@ -275,12 +276,36 @@ void RemoteThread::MenuHandleKeypress(unsigned long KeyCode) {
         }
         return;
     }
-    else if((KeyCode == PANEL_WHEEL_CW) || (KeyCode == REMOTE_DOWN)) {
+    else if(KeyCode == PANEL_WHEEL_CW) {
+        if(CurrentMenu == 0) {
+            Volume += 2;
+            SetVolume();
+            printf("Remote: Volume is now %d\n", Volume);
+        }
+        else {
+            ActiveMenu.Advance();
+            Display.Update(&ActiveMenu);
+        }
+        return;
+    }
+    else if(KeyCode == PANEL_WHEEL_CCW) {
+        if(CurrentMenu == 0) {
+            Volume -= 2;
+            SetVolume();
+            printf("Remote: Volume is now %d\n", Volume);
+        }
+        else {
+            ActiveMenu.Advance();
+            Display.Update(&ActiveMenu);
+        }
+        return;
+    }
+    else if(KeyCode == REMOTE_DOWN) {
         ActiveMenu.Advance();
         Display.Update(&ActiveMenu);
         return;
     }
-    else if((KeyCode == PANEL_WHEEL_CCW) || (KeyCode == REMOTE_UP)) {
+    else if(KeyCode == REMOTE_UP) {
         ActiveMenu.Reverse();
         Display.Update(&ActiveMenu);
         return;

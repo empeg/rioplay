@@ -29,6 +29,7 @@ extern DisplayThread Display;
 ShoutcastList::ShoutcastList(void) {
     FILE *fp;
     char TempString[256];
+    char *TempPtr;
     int CurrentStream = -1, CurrentUrl = 0;
     
     strcpy(StreamTitle, "Streaming Audio");
@@ -42,6 +43,12 @@ ShoutcastList::ShoutcastList(void) {
     fp = fopen("/etc/streams.cfg", "r");
     
     while(fgets(TempString, 256, fp) != NULL) {
+        if((TempPtr = strstr(TempString, "\r")) != NULL) {
+            TempPtr[0] = '\0';
+        }
+        if((TempPtr = strstr(TempString, "\n")) != NULL) {
+            TempPtr[0] = '\0';
+        }
         if(strstr(TempString, "<title>") != NULL) {
             CurrentStream++;
             NumEntries++;
