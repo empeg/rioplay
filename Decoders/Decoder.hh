@@ -30,7 +30,7 @@ public:
     virtual ~Decoder(void);
     virtual void *ThreadMain(void *arg) = 0;
     virtual void SetMetadataFrequency(int Freq);
-    void SetPause(int pause);
+    void SetPause(bool pause);
 protected:
     bool Paused, Stop;
     int SongFD;
