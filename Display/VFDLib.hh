@@ -23,8 +23,13 @@
 #ifndef VFDLIB_HH
 #define VFDLIB_HH
 
+#define VFD_FONT_SMALL		0
+#define VFD_FONT_MEDIUM		1
+#define VFD_FONT_TIME		2
+
+#define VFD_DEFAULT_FONT VFD_FONT_MEDIUM
+#define VFD_HEIGHT		64
 #define VFD_WIDTH               128
-#define VFD_HEIGHT              64
 #define VFD_BYTES_PER_SCANLINE  64
 
 #define VFDSHADE_BLACK          0x00
