@@ -16,6 +16,7 @@
 #include <string.h>
 #include "MenuScreen.hh"
 #include "MemAlloc.hh"
+#include "Globals.hh"
 
 MenuScreen::MenuScreen(void) {
     Title[0] = '\0';
@@ -23,6 +24,7 @@ MenuScreen::MenuScreen(void) {
     NumOptions = 0;
     CurrentlySelected = 0;
     SelectedPos = 1;
+    MaxMenus = 4;
 }
 
 MenuScreen::~MenuScreen(void) {
@@ -93,8 +95,8 @@ void MenuScreen::Advance(void) {
             SelectedPos = 1;
         }
     }
-    if(SelectedPos > 4) {
-        SelectedPos = 4;
+    if(SelectedPos > MaxMenus) {
+        SelectedPos = MaxMenus;
     }
     if(SelectedPos > NumOptions) {
         SelectedPos = NumOptions;
@@ -106,7 +108,7 @@ void MenuScreen::Reverse(void) {
     SelectedPos--;
     if(CurrentlySelected < 1) {
         CurrentlySelected = NumOptions;
-        SelectedPos = 4;
+        SelectedPos = MaxMenus;
         if(SelectedPos > NumOptions) {
             SelectedPos = NumOptions;
         }
@@ -118,49 +120,64 @@ void MenuScreen::Reverse(void) {
 
 void MenuScreen::Update(VFDLib &Display) {
     int i;
+    int vfd_width = VFDLib::vfd_width;
+    int vfd_height = VFDLib::vfd_height;
+    int vfd_default_font = VFDLib::vfd_default_font;
 
     /* We put the string height here since we do a lot of calculations
      * from this unchanging value, rather than compute it every time we
      * decide to use it.
      */
-    int StringHeight = Display.getTextHeight(VFD_DEFAULT_FONT);
+    int StringHeight = Display.getTextHeight(vfd_default_font);
+
+    /* Empegs have smaller screen real estate, so fewer menus */
+    if (Globals::hw_type == HWTYP_EMPEG)
+	    MaxMenus = 3;
 
     /* Set clip area to the whole screen */
-    Display.setClipArea(0, 0, VFD_WIDTH, VFD_HEIGHT);
+    Display.setClipArea(0, 0, vfd_width, vfd_height);
     
     /* Clear screen */
     Display.clear(VFDSHADE_BLACK);
     
     /* Draw title */
-    Display.drawText(Title, (VFD_WIDTH - Display.getTextWidth(Title, VFD_DEFAULT_FONT)) / 2,
-            1, VFD_DEFAULT_FONT, -1);
+    Display.drawText(Title, (vfd_width - 
+	    Display.getTextWidth(Title, vfd_default_font)) / 2,
+            1, vfd_default_font, -1);
     
     /* Inverse menu title */
-    Display.invertRectangleClipped(0, 0, VFD_WIDTH, StringHeight + 1);
+    Display.invertRectangleClipped(0, 0, vfd_width, StringHeight + 1);
     
     /* Draw Border */
-    Display.drawLineHorizClipped(VFD_HEIGHT-1, 0, VFD_WIDTH-1, VFDSHADE_BRIGHT);
-    Display.drawLineVertClipped(0, 0, VFD_HEIGHT-1, VFDSHADE_BRIGHT);
-    Display.drawLineVertClipped(VFD_WIDTH-1, 0, VFD_HEIGHT-1, VFDSHADE_BRIGHT);
+    if ((NumOptions < MaxMenus) || 
+	(Globals::hw_type != HWTYP_EMPEG)) /* Border blocks big menus */  
+    	    Display.drawLineHorizClipped(vfd_height-1, 0, vfd_width-1, 
+	    VFDSHADE_BRIGHT);
+    Display.drawLineVertClipped(0, 0, vfd_height-1, VFDSHADE_BRIGHT);
+    Display.drawLineVertClipped(vfd_width-1, 0, vfd_height-1, VFDSHADE_BRIGHT);
 
     /* Change clipping area */
-    Display.setClipArea(3, StringHeight + 3, VFD_WIDTH-3, VFD_HEIGHT-3);
-    
+    if ((NumOptions < MaxMenus) || 
+	(Globals::hw_type != HWTYP_EMPEG)) /* Clipping blocks big menus */  
+      Display.setClipArea(3, StringHeight + 3, vfd_width-3, vfd_height-3);
+    else /* allow for a little more room on shorter displays */
+      Display.setClipArea(3, StringHeight + 3, vfd_width-3, vfd_height);
+
     if(NumOptions > 0) {
         /* Draw menu items */
         for(i = (CurrentlySelected - (SelectedPos - 1));
-                (i < (CurrentlySelected + (4 - (SelectedPos - 1)))) &&
+                (i < (CurrentlySelected + (MaxMenus - (SelectedPos - 1)))) &&
                 (i <= NumOptions); i++) {
             Display.drawText(Options[i - 1], 4, StringHeight + 4 + 
                     ((StringHeight + 2) *
                     (i - (CurrentlySelected - (SelectedPos - 1)))),
-                    VFD_DEFAULT_FONT, -1);
+                    vfd_default_font, -1);
         }
 
         /* Invert the selected menu item */
         /* (there's some ugly math here but it works...) */
         Display.invertRectangleClipped(2, StringHeight + 3 +
-		((StringHeight + 2) * (SelectedPos - 1)), VFD_WIDTH-3,
+		((StringHeight + 2) * (SelectedPos - 1)), vfd_width-3,
                 (StringHeight * 2) + 4 +
                 ((StringHeight + 2) * (SelectedPos - 1)));
     }
