@@ -35,6 +35,7 @@ private:
     int NumOptions;
     int CurrentlySelected;
     int SelectedPos;
+    int MaxMenus;
 };
 
 #endif /* #ifndef MENUSCREEN_HH */

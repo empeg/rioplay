@@ -24,15 +24,28 @@
 #include <stdio.h>
 #include <string.h>
 #include "VFDLib.hh"
+#include "Globals.hh"
 
 #define MASK_LO_NYBBLE   0x0F
 #define MASK_HI_NYBBLE   0xF0
 
+int VFDLib::vfd_width;
+int VFDLib::vfd_height;
+int VFDLib::vfd_default_font;
+
 VFDLib::VFDLib(void) {
+    vfd_width = VFD_WIDTH;
+    vfd_height = VFD_HEIGHT;
+    vfd_default_font = VFD_DEFAULT_FONT;
+    if (Globals::hw_type == HWTYP_EMPEG)
+    {
+	    vfd_height = VFD_HEIGHT_EMPEG;
+	    vfd_default_font = VFD_DEFAULT_FONT_EMPEG;
+    }
     g_clipXLeft = 0;
     g_clipYTop = 0;
-    g_clipXRight = VFD_WIDTH;
-    g_clipYBottom = VFD_HEIGHT;
+    g_clipXRight = vfd_width;
+    g_clipYBottom = vfd_height;
     bzero(&g_fontRegistry, sizeof(FontInfo) * NUM_FONT_SLOTS);
     DisplayMemMap = NULL;
     registerFont("/empeg/lib/fonts/small.bf", VFD_FONT_SMALL);
@@ -68,10 +81,10 @@ void VFDLib::setClipArea(int xLeft, int yTop, int xRight, int yBottom) {
         xLeft = 0;
     if (yTop < 0)
         yTop = 0;
-    if (xRight > VFD_WIDTH)
-        xRight = VFD_WIDTH;
-    if (yBottom > VFD_HEIGHT)
-        yBottom = VFD_HEIGHT;
+    if (xRight > vfd_width)
+        xRight = vfd_width;
+    if (yBottom > vfd_height)
+        yBottom = vfd_height;
 
     /* assign new values */
     g_clipXLeft = xLeft;
@@ -1176,7 +1189,7 @@ void VFDLib::drawSolidPolygon(int *coordsData, int numPoints,
         return ;
 
     /* clear the edge table */
-    for (i = 0; i < VFD_HEIGHT; i++)
+    for (i = 0; i < vfd_height; i++)
         edgeTable[i] = NULL;
 
     /* add edges to edge table */

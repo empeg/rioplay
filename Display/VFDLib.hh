@@ -28,8 +28,13 @@
 #define VFD_FONT_TIME		2
 
 #define VFD_DEFAULT_FONT VFD_FONT_MEDIUM
+#define VFD_DEFAULT_FONT_EMPEG VFD_FONT_SMALL
+
 #define VFD_HEIGHT		64
+#define VFD_HEIGHT_EMPEG	32
+
 #define VFD_WIDTH               128
+
 #define VFD_BYTES_PER_SCANLINE  64
 
 #define VFDSHADE_BLACK          0x00
@@ -60,6 +65,10 @@ public:
     /* Constructors & desctructor */
     VFDLib(void);
     ~VFDLib(void);
+
+    static int vfd_height;
+    static int vfd_width;
+    static int vfd_default_font;
 
     /* Set buffer */
     void setBuffer(char *inDisplayMemMap);
@@ -121,7 +130,7 @@ public:
     void drawBitmap(unsigned char *bitmap, int destX, int destY,
             int sourceX, int sourceY, int width, int height,
             signed char shade, int isTransparent);
-
+    
 private:
     void drawPixel4WaySymmetricClipped(int cX, int cY,
             int x, int y, char shade);
@@ -149,7 +158,7 @@ private:
     int g_clipXRight;
     int g_clipYBottom;
     FontInfo g_fontRegistry[NUM_FONT_SLOTS];
-    char *DisplayMemMap;
+    char *DisplayMemMap;  
 };
 
 #endif // #ifndef VFDLIB_HH

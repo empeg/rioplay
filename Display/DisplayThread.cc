@@ -38,7 +38,7 @@ DisplayThread::DisplayThread(void) {
     Display.setBuffer(DisplayBuf);
     
     /* Clear the display */
-    Display.setClipArea(0, 0, VFD_WIDTH, VFD_HEIGHT);
+    Display.setClipArea(0, 0, VFDLib::vfd_width, VFDLib::vfd_height);
     Display.clear(VFDSHADE_BLACK);
     Push();
     
@@ -66,7 +66,7 @@ void *DisplayThread::ThreadMain(void *arg) {
                than the bottom [for instance a menu screen should
                "cover up" the audio player status screen]) */
             if(TopChanged == true) {
-                Display.setClipArea(0, 0, VFD_WIDTH, VFD_HEIGHT);
+                Display.setClipArea(0, 0, VFDLib::vfd_width, VFDLib::vfd_height);
                 Display.clear(VFDSHADE_BLACK);
                 TopChanged = false;
             }
@@ -75,7 +75,7 @@ void *DisplayThread::ThreadMain(void *arg) {
         else if(BottomScreenPtr != NULL) {
             /* No top screen, but there is a bottom screen so show that */
             if(BottomChanged == true) {
-                Display.setClipArea(0, 0, VFD_WIDTH, VFD_HEIGHT);
+                Display.setClipArea(0, 0, VFDLib::vfd_width, VFDLib::vfd_height);
                 Display.clear(VFDSHADE_BLACK);
                 BottomChanged = false;
             }
@@ -109,7 +109,7 @@ void DisplayThread::RemoveTopScreen(Screen *ScreenPtr) {
     }
     if(BottomScreenPtr != NULL) {
         /* Call update to redraw the bottom screen */
-        Display.setClipArea(0, 0, VFD_WIDTH, VFD_HEIGHT);
+        Display.setClipArea(0, 0, VFDLib::vfd_width, VFDLib::vfd_height);
         Display.clear(VFDSHADE_BLACK);
         BottomScreenPtr->Update(Display);
         Push();
@@ -146,8 +146,17 @@ void DisplayThread::Update(Screen *ScreenPtr) {
 void DisplayThread::ShowHourglass(void) {
     /* This function will display an hourglass over the screen until the
        next time the screen is updated */
-    unsigned int Xoffset = (VFD_WIDTH - StopwatchWidth) / 2;
-    unsigned int Yoffset = (VFD_HEIGHT - StopwatchHeight) / 2;
+    unsigned int Xoffset = 0, Yoffset = 0;
+    unsigned int watchHeight = StopwatchHeight;
+    unsigned char *watch = StopwatchData;
+
+    if (VFDLib::vfd_height < 64) /* Shorter display, use shorter clock */
+    {
+	watchHeight = StopwatchHeightEmpeg;
+	watch = StopwatchDataEmpeg;
+    } 
+    Xoffset = (VFDLib::vfd_width - StopwatchWidth) / 2;
+    Yoffset = (VFDLib::vfd_height - watchHeight) / 2;
 
     /* This is an attempt to make sure that any pending display update
        is handled before the stopwatch is drawn.  Should probably
@@ -156,12 +165,12 @@ void DisplayThread::ShowHourglass(void) {
     
     pthread_mutex_lock(&ClassMutex);
     Display.setClipArea(Xoffset, Yoffset, Xoffset + StopwatchWidth,
-            Yoffset + StopwatchHeight);
+            Yoffset + watchHeight);
     Display.drawSolidRectangleClipped(Xoffset, Yoffset,
-            Xoffset + StopwatchWidth, Yoffset + StopwatchHeight,
+            Xoffset + StopwatchWidth, Yoffset + watchHeight,
             VFDSHADE_BLACK);
-    Display.drawBitmap(StopwatchData, Xoffset, Yoffset, 0, 0, StopwatchWidth,
-            StopwatchHeight, -1, 0);
+    Display.drawBitmap(watch, Xoffset, Yoffset, 0, 0, StopwatchWidth,
+            watchHeight, -1, 0);
     Push();
     TopChanged = true;
     BottomChanged = true;
