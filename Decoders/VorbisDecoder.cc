@@ -119,6 +119,13 @@ void *VorbisDecoder::ThreadMain(void *arg) {
             /* Configure output device to correct sample rate */
             Globals::AudioOut->SetSampleRate(ov_info(&vf, -1)->rate);
 
+	    /* Check for pause */
+	    pthread_mutex_lock(&ClassMutex);
+	    if(Paused == true) {
+	        pthread_cond_wait(&ClassCondition, &ClassMutex);
+	    }
+    	    pthread_mutex_unlock(&ClassMutex);
+
             /* Play the decoded samples */
             Globals::AudioOut->Play(pcmout, ret);
 
