@@ -42,7 +42,7 @@ public:
     PlaylistCommandHandler(PlaylistClass *inPList);
     ~PlaylistCommandHandler(void);
     void Handle(const unsigned long &Keycode);
-
+    int GetCurrentMenu() { return CurrentMenu; }
 private:
     MenuScreen Menu;
     enum MenuTypes {

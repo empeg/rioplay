@@ -18,6 +18,7 @@ public:
     CommandHandler(void);
     virtual ~CommandHandler(void);
     virtual void Handle(const unsigned long &Keycode) = 0;
+    virtual int GetCurrentMenu() = 0;
 };
 
 #endif // COMMANDHANDLER_HH
