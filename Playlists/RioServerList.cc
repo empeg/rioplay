@@ -109,7 +109,7 @@ RioServerList::~RioServerList(void) {
 
 void RioServerList::DoQuery(char *Field, char *Query) {
     HttpConnection *Http = NULL;
-    char TempString[128];
+    char TempString[256];
     char *TempPtr;
     int i;
     FILE *fp;
@@ -132,7 +132,7 @@ void RioServerList::DoQuery(char *Field, char *Query) {
     fp = Http->GetFilePointer();
     
     /* Throw away "matches=" response */
-    fgets(TempString, 128, fp);
+    fgets(TempString, 256, fp);
 
     /* Free the old list */
     if(List != NULL) {
@@ -144,7 +144,7 @@ void RioServerList::DoQuery(char *Field, char *Query) {
     }
     
     /* Read query responses */
-    for(i = 0; fgets(TempString, 128, fp) > 0; i++) {
+    for(i = 0; fgets(TempString, 256, fp) > 0; i++) {
         /* Check to see if we need to expand the array */
         if((i % 10) == 0) {
             List = (char **) __realloc(List, sizeof(char *) * (i + 10));
@@ -179,7 +179,7 @@ void RioServerList::DoQuery(char *Field, char *Query) {
 
 void RioServerList::DoResults(char *Field, char *Query) {
     HttpConnection *Http = NULL;
-    char TempString[128];
+    char TempString[256];
     int TempSongID;
     int i;
     FILE *fp;
@@ -209,7 +209,7 @@ void RioServerList::DoResults(char *Field, char *Query) {
     }
     
     /* Read the Song ID */
-    for(i = 0; fgets(TempString, 128, fp) > 0; i++) {
+    for(i = 0; fgets(TempString, 256, fp) > 0; i++) {
         sscanf(TempString, "%x=", &TempSongID);
         /* Check to see if we need to expand the array */
         if((i % 10) == 0) {
@@ -226,7 +226,7 @@ void RioServerList::DoResults(char *Field, char *Query) {
 
 void RioServerList::DoPlaylists(void) {
     HttpConnection *Http = NULL;
-    char TempString[128];
+    char TempString[256];
     char *TempPtr;
     int i;
     FILE *fp;
@@ -260,7 +260,7 @@ void RioServerList::DoPlaylists(void) {
     }
     
     /* Read query responses */
-    for(i = 0; fgets(TempString, 128, fp) > 0; i++) {
+    for(i = 0; fgets(TempString, 256, fp) > 0; i++) {
         /* Check to see if we need to expand the array */
         if((i % 10) == 0) {
             List = (char **) __realloc(List, sizeof(char *) * (i + 10));
@@ -300,7 +300,7 @@ void RioServerList::DoPlaylists(void) {
 
 void RioServerList::DoPlaylistContents(int ID) {
     HttpConnection *Http = NULL;
-    char TempString[128];
+    char TempString[256];
     int i;
     int TempSongID;
     FILE *fp;
@@ -327,7 +327,7 @@ void RioServerList::DoPlaylistContents(int ID) {
     }
     
     /* Read the Song ID */
-    for(i = 0; fgets(TempString, 128, fp) > 0; i++) {
+    for(i = 0; fgets(TempString, 256, fp) > 0; i++) {
         sscanf(TempString, "%x=", &TempSongID);
         /* Check to see if we need to expand the array */
         if((i % 10) == 0) {
@@ -348,9 +348,9 @@ void RioServerList::DoPlaylistContents(int ID) {
 Tag RioServerList::GetTag(int EntryNumber) {
     HttpConnection *Http = NULL;
     int QueryFD;
-    char TempString[128];
+    char TempString[256];
     Tag ReturnVal;
-    char Data[128];
+    char Data[256];
     unsigned char Key;
     unsigned char Size;
 

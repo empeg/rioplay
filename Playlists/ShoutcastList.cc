@@ -23,6 +23,7 @@
 #include "MenuScreen.hh"
 #include "KeyCodes.h"
 #include "MemAlloc.hh"
+#include "Log.hh"
 
 extern DisplayThread Display;
 
@@ -40,7 +41,13 @@ ShoutcastList::ShoutcastList(void) {
     StreamUrls = NULL;
     NumUrls = NULL;
     
-    fp = fopen("/etc/streams.cfg", "r");
+    if((fp = fopen("/etc/streams.cfg", "r"))==NULL){
+      Log::GetInstance()->Post(LOG_ERROR, __FILE__, __LINE__,
+			     "streams.cfg is missing");
+      return;
+    }
+    
+
     
     while(fgets(TempString, 256, fp) != NULL) {
         if((TempPtr = strstr(TempString, "\r")) != NULL) {

@@ -53,7 +53,7 @@ HttpConnection::~HttpConnection(void) {
 int HttpConnection::Connect(void) {
     struct sockaddr_in ServAddr;
     struct hostent *HostEntry;
-    char TempString[128];
+    char TempString[256];
     
     bzero((char *) &ServAddr, sizeof(ServAddr));
     ServAddr.sin_family = AF_INET;
