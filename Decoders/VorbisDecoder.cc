@@ -129,20 +129,20 @@ void *VorbisDecoder::ThreadMain(void *arg) {
         }
         else {
             /* Configure output device to correct sample rate */
-//            AudioOut->SetSampleRate(ov_info(&vf, -1)->rate);
+            AudioOut->SetSampleRate(ov_info(&vf, -1)->rate);
 
             /* Play the decoded samples */
             AudioOut->Play(pcmout, ret);
 
             /* Update time display */
-//            TempTime = ov_pcm_tell(&vf) / ov_info(&vf, -1)->rate;
-//            if (LastTime != TempTime) {
-//                Globals::Status.SetTime(TempTime / 60, TempTime % 60);
-//                LastTime = TempTime;
+            TempTime = ov_pcm_tell(&vf) / ov_info(&vf, -1)->rate;
+            if (LastTime != TempTime) {
+                Globals::Status.SetTime(TempTime / 60, TempTime % 60);
+                LastTime = TempTime;
 
                 /* Signal the display thread that the time has changed */
-//                Globals::Display.Update(&Globals::Status);
-//            }
+                Globals::Display.Update(&Globals::Status);
+            }
         }
     }
 
