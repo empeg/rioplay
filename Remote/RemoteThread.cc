@@ -178,6 +178,7 @@ void *RemoteThread::ThreadMain(void *arg) {
                     break;
 
                 case REMOTE_RANDOM:
+                case PANEL_RANDOM:
                     /* Randomize playlist */
                     Globals::Playlist.Randomize();
                     break;
