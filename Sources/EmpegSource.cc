@@ -49,6 +49,7 @@ EmpegSource::~EmpegSource(void) {
     delete Handler;
 }
 
+
 void EmpegSource::PrintVector(ostream& os, const vector<ListElem>& vectarray) {
     for(
         vector<ListElem>::const_iterator it = vectarray.begin();
@@ -73,8 +74,9 @@ int EmpegSource::FIDtoIndex(const vector<ListElem>& vectarray,
     )
     {
         const ListElem& elem = *it;
-	if (isLongFid)
-		myFid = FID >> 4;
+	if (isLongFid) {
+	    myFid = FID >> 4;
+	}
         if (elem.db_id_ == myFid)
 	{
 	    found = true;
@@ -82,8 +84,9 @@ int EmpegSource::FIDtoIndex(const vector<ListElem>& vectarray,
 	}
 	index++;
     }
-    if (found == false)
+    if (found == false) {
     	index = -1;
+    }
 	
     return index;
 }
@@ -116,7 +119,8 @@ int EmpegSource::LocateFID(int FID) {
 	return location;	
 }
 
-int EmpegSource::GetPListContents(int index, bool recurse, list<StringID>& plist)
+int EmpegSource::GetPListContents(int index, bool recurse, bool tunesonly,
+        list<StringID>& plist)
 {
 	int offset = PLists[index].offset_;
 	int length = PLists[index].length_;
@@ -124,35 +128,42 @@ int EmpegSource::GetPListContents(int index, bool recurse, list<StringID>& plist
 	FILE *fp2 = NULL;
 						
 	fp2=fopen(PLFILE, "rb");
-	if (fp2 == NULL) return -1;
-	if (fseek(fp2, offset, SEEK_SET) != 0) return -2;	
+	if (fp2 == NULL) { return -1; }
+	if (fseek(fp2, offset, SEEK_SET) != 0) { return -2; }	
 
 	  for (u=0; u < (length/4); u++)
 	  {
 		fread(&z,4,1,fp2);
 
 		if ((location = FIDisPList(z, true)) > -1)
-		{		    
+		{	    
 		    /* Got a playlist */
+		    
+		    if (!tunesonly) {
+        		    plist.push_back(StringID(PLists[location].title_,
+        		        PLists[location].index_));
+                    }			
 		    if (recurse)
 		    {
 		    	long position = ftell(fp2);
 		        fclose(fp2); /* So we don't have tons of open pointers */
 			fp2 = NULL;
 			
-		    	GetPListContents(location, recurse, plist);
+		    	GetPListContents(location, recurse, tunesonly, plist);
 			
 			fp2=fopen(PLFILE, "rb");
-			if (fp2 == NULL) return -1;
-			if (fseek(fp2, position, SEEK_SET) != 0 ) return -2;
+			if (fp2 == NULL) { return -1; }
+			if (fseek(fp2, position, SEEK_SET) != 0 ) { return -2; }
 			
 		    }
 		}
-		else if ((location = FIDtoIndex(PlayerDB, z, true)) > -1)
+		else if (tunesonly)
 		{
-		    /* Got a tune */
-		    plist.push_back(StringID(PlayerDB[location].title_, 
-		    	PlayerDB[location].index_));
+		    /* Want a tune */
+		    if ((location = FIDtoIndex(PlayerDB, z, true)) > -1) {
+        		    plist.push_back(StringID(PlayerDB[location].title_, 
+        		    	PlayerDB[location].index_));
+                    }
 		}
 	  }
 	fclose(fp2);
@@ -167,7 +178,7 @@ void EmpegSource::GatherDBInfo(void) {
 	long int offset = 0;
         FILE    *fp = NULL;
 
-	ListElem *elem;
+	ListElem *elem = NULL;
 
 	printf("Gathering Empeg Database Info ...\n");
 
@@ -207,7 +218,7 @@ void EmpegSource::GatherDBInfo(void) {
 	/* Open database file */
 
 	printf("\tRetrieving Song Database ...\n");
-	
+
         fp=fopen(DBFILE, "rb");
 	if(fp == NULL) {
         	Log::GetInstance()->Post(LOG_FATAL, __FILE__, __LINE__,
@@ -233,7 +244,6 @@ void EmpegSource::GatherDBInfo(void) {
                                    i=(db_index-1) << 4 | 0;
 
 				   location = LocateFID(i);
-				   
 				   if (location == 0)
 					sprintf(s,"/drive0/fids/%x",i);
 				   else if (location == 1)
@@ -263,7 +273,7 @@ void EmpegSource::GatherDBInfo(void) {
 					PLists.push_back(*elem);
 					plists++;
 				}
-				if (elem) delete elem;
+				if (elem) { delete elem; }
 				elem = new ListElem();
                                 end_entry=0;
                         }
@@ -273,35 +283,43 @@ void EmpegSource::GatherDBInfo(void) {
                         fread(&c,1,1,fp);
                         fread(s,1,c,fp);
                         s[c]='\0';
-			if (strcmp(tags[i], "type") == 0)
-				elem->type_ = strnew(s);
-			else if (strcmp(tags[i], "artist") == 0)
-				elem->artist_ = strnew(s);
+			if (strcmp(tags[i], "type") == 0) {
+                                elem->type_ = strnew(s);
+			}
+			else if (strcmp(tags[i], "artist") == 0) {
+                                elem->artist_ = strnew(s);
+			}
 			else if (strcmp(tags[i], "source") == 0)
 			{
-				if (strlen(s) == 0)
-					strcpy(s, "No Album");
-				elem->album_ = strnew(s);
+                                if (strlen(s) == 0) {
+                                        strcpy(s, "No Album");
+                                }
+                                elem->album_ = strnew(s);
 			}	
-			else if (strcmp(tags[i], "title") == 0)
-				elem->title_ = strnew(s);
-			else if (strcmp(tags[i], "genre") == 0)
-			{
-				if (strlen(s) == 0)
-					strcpy(s, "No Genre");
+			else if (strcmp(tags[i], "title") == 0) {
+                                elem->title_ = strnew(s);
+			}
+			else if (strcmp(tags[i], "genre") == 0) {
+				if (strlen(s) == 0) {
+                                        strcpy(s, "No Genre");
+                                }
 				elem->genre_ = strnew(s);
 			}	
-			else if (strcmp(tags[i], "year") == 0)
-				elem->year_ = strnew(s);
-			else if (strcmp(tags[i], "tracknr") == 0)
-				elem->tracknum_ = strnew(s);
-			else if (strcmp(tags[i], "codec") == 0)
-				elem->codec_ = strnew(s);
-			else if (strcmp(tags[i], "length") == 0)
-				elem->length_ = atol(s);
-			else if (strcmp(tags[i], "duration") == 0)
-				elem->duration_ = atol(s);
-
+			else if (strcmp(tags[i], "year") == 0) {
+                                elem->year_ = strnew(s);
+			}
+			else if (strcmp(tags[i], "tracknr") == 0) {
+                                elem->tracknum_ = strnew(s);
+			}
+			else if (strcmp(tags[i], "codec") == 0) {
+                                elem->codec_ = strnew(s);
+			}
+			else if (strcmp(tags[i], "length") == 0) {
+                                elem->length_ = atol(s);
+			}
+			else if (strcmp(tags[i], "duration") == 0) {
+                                elem->duration_ = atol(s);
+                        }
                 }
         }
         fclose(fp);
@@ -367,25 +385,25 @@ void EmpegSource::DoResults(char *Field, const char *Query) {
 	{
 		if ((strcmp(Query, elem.artist_) == 0) ||
 			(strlen(Query) == 0))
-		   SongList.push_front(StringID(elem.title_, elem.index_));
+		   SongList.push_back(StringID(elem.title_, elem.index_));
 	}
 	else if (strcmp(Field, "source") == 0)
 	{
 		if ((strcmp(Query, elem.album_) == 0) ||
 			(strlen(Query) == 0))
-		   SongList.push_front(StringID(elem.title_, elem.index_));
+		   SongList.push_back(StringID(elem.title_, elem.index_));
 	}
 	else if (strcmp(Field, "genre") == 0)
 	{
 		if ((strcmp(Query, elem.genre_) == 0) ||
 			(strlen(Query) == 0))
-		   SongList.push_front(StringID(elem.title_, elem.index_));
+		   SongList.push_back(StringID(elem.title_, elem.index_));
 	}
 	else if (strcmp(Field, "title") == 0)
 	{
 		if ((strcmp(Query, elem.title_) == 0) ||
 			(strlen(Query) == 0))
-		   SongList.push_front(StringID(elem.title_, elem.index_));
+		   SongList.push_back(StringID(elem.title_, elem.index_));
 	}
     }
  
@@ -393,50 +411,133 @@ void EmpegSource::DoResults(char *Field, const char *Query) {
     SongList.sort();
 }
 
-void EmpegSource::DoPlaylists(void) {
-//    int location = 0;
-    
-    /* Clear the list */
-    SongList.clear();
-    List.clear();
+void EmpegSource::DoPlaylists(int root, bool tunesonly) {
+         
+    /* Ideal functionality for playlists (Idea stolen from commercial Empeg software)
 
-/*	//For testing purposes ... manually set FIDs below
-    location = FIDisPList(0x000e29, false);
-    printf("Alison Krauss: %d\n", location);
-    
-    SongList.push_back(StringID(PLists[location].title_, PLists[location].index_));
-    List.push_back(PLists[location].title_);
-
-    location = FIDisPList(0x00017c, false);
-    printf("Webb Wilder: %d\n", location);
-    
-    SongList.push_back(StringID(PLists[location].title_, PLists[location].index_));
-    List.push_back(PLists[location].title_);
-*/
-     
-    /* We don't work with playlists, yet.  Hopefully soon! */
-    /* For each playlist we've got insert the playlist name and ID */
-    /*   
-        SongList.push_back(StringID(name, id));
-        List.push_back(name);
+            menu items for root level playlists
+                menu item for play all (play recursive tracks)
+                menu item for list tracks (no recursion)
+                    menu item for play these (play all tracks here)
+                    menu items for immediate tracks
+                        play 1 track
+                menu items for immediate child playlists
+                    upon selection of one of these
+                        repeat ...
     */
+
+        // Find the Root Playlist
+        int location = root;
+        list<StringID>::iterator IDiter;
+	
+	#define PL_PLAYALL    "Play All (Recursive)"
+	#define PL_TRACKS     "List Tracks"
+	#define PL_PLAYHERE   "Play These"
+
+        // Clear the list
+        SongList.clear();
+        List.clear();
+			
+        if (!tunesonly) { // we want playlists
+                SongList.push_back(StringID(PL_PLAYALL, location));
+                SongList.push_back(StringID(PL_TRACKS, location));
+
+                // the false means don't recurse
+	        GetPListContents(location, false, tunesonly, SongList);		
+                for(IDiter = SongList.begin(); IDiter != SongList.end();
+                        IDiter++) {
+                        char *title = (char *)((*IDiter).Str.c_str());		
+                        List.push_back(title);
+         	}
+        }
+        else { // we just want tunes (Play These)
+                 List.push_back(PL_PLAYHERE);
+
+                 // the false means don't recurse
+	         GetPListContents(location, false, tunesonly, SongList);	
+                 for(IDiter = SongList.begin(); IDiter != SongList.end();
+                        IDiter++) {
+                        char *title = (char *)((*IDiter).Str.c_str());		
+                        List.push_back(title);
+         	}
+	}
 }
 
-void EmpegSource::DoPlaylistContents(int ID) {
+int EmpegSource::PlaylistSelect(int selection) {
+        list<StringID>::iterator IDiter;
+        char * selectedMenu = NULL;
+	int action = 0;
+	int location = 0;
+	int z = 0;
+	
+	selection = selection - 1;
+	selectedMenu = (char *)(List[selection].c_str());
 
-    /* Clear the list */
-    SongList.clear();
+	#define ACT_NONE 0
+	#define ACT_PLAY 1
+	#define ACT_MENU 2
 
-//	Uncomment next two lines for testing purposes.
-//    printf("Getting Playlist %s:%d\n", PLists[ID].title_, ID);
-//    GetPListContents(ID, true, SongList); /* true is for recursive */
-    
-    /* We don't work with playlists, yet.  Hopefully soon! */
-    /* For each track in playlist insert the song name and ID */
-    /* SongList.push_back(StringID(name, id)); */
+        if (strcmp(selectedMenu, PL_PLAYALL) == 0) {
+	        location = (SongList.front()).ID; /* The root plist */
+        	SongList.clear();
+		/* Get a recursive list of songs */
+                GetPListContents(location, true, true,
+		        SongList);
+		
+		action = ACT_PLAY;			
+	}
+	else if (strcmp(selectedMenu, PL_TRACKS) == 0) {
+	        location = (SongList.front()).ID; /* The root plist */
+	        DoPlaylists(location, true);
+		
+		action = ACT_MENU;
+	}
+	else if (strcmp(selectedMenu, PL_PLAYHERE) == 0) {
+		action = ACT_PLAY;
+	}
+	else {        // It's either a playlist or a track
+                /* If it was a track, then the first item
+		     in List() will be PL_PLAY_HERE */
+		if (strcmp(List[0].c_str(), PL_PLAYHERE) == 0) {
+		        // it was a track!
+			string title;
+			z = 0;
+                        for(IDiter = SongList.begin();
+                            ((z <= (selection)) && (IDiter != SongList.end())); 
+			    IDiter++) {
+                            z++;
+			    if (z == selection) {
+			          title = (*IDiter).Str;
+				  location = (*IDiter).ID;
+				  break;
+			    }
+                        }
+			
+                	SongList.clear(); // dump list
+			SongList.push_back(StringID(title, location)); //only one track
+			
+       			action = ACT_PLAY;
+		}
+		else {  // It was a playlist
+			z = 0;
+                        for(IDiter = SongList.begin();
+                            ((z <= (selection+1)) && (IDiter != SongList.end())); 
+			    IDiter++) {
+                            z++; 
 
-    return;
+			    if (z == (selection+1)) {
+			          location = (*IDiter).ID;
+				  break;
+			    }
+                        }
+			DoPlaylists(location, false);
+			
+			action = ACT_MENU;
+		}	
+	}
+	return action;
 }
+
 
 Tag EmpegSource::GetTag(int ID) {
     Tag ReturnVal;
@@ -525,7 +626,7 @@ void EmpegCommandHandler::Handle(const unsigned long &Keycode) {
                     break;
                 case 5:
                     Menu.SetTitle("Select Playlist");
-                    Empeg->DoPlaylists();
+                    Empeg->DoPlaylists(0, false); // Start with root plist
                     CurrentMenu = MENU_PLAYLIST;
                     break;
             }
@@ -567,21 +668,38 @@ void EmpegCommandHandler::Handle(const unsigned long &Keycode) {
             break;
             
         case MENU_PLAYLIST:
-            IDiter = Empeg->SongList.begin();
-            /* Seems like there should be a better way to do this */
-            for(int i = 0; i < (Menu.GetSelection() - 1); i++) {
-                IDiter++;
+	    int action = 0; 
+	    action = Empeg->PlaylistSelect(Menu.GetSelection());
+	    
+            switch (action) {
+	            case ACT_MENU:
+                            Menu.ClearOptions();
+                            Globals::Display->ShowHourglass();
+                            for(vector<string>::iterator iter = Empeg->List.begin();
+                                    iter != Empeg->List.end();
+                                    iter++) {
+                                Menu.AddOption((*iter).c_str());
+                            }
+                            Globals::Display->Update(&Menu);
+ 		            break;
+	            case ACT_PLAY: 
+                            for(IDiter = Empeg->SongList.begin(); IDiter != Empeg->SongList.end();
+                                    IDiter++) {
+                                Globals::Playlist.Enqueue(Empeg, (*IDiter).ID, (*IDiter).Str);
+                            }
+                            CurrentMenu = MENU_NONE;
+                            Globals::Display->RemoveTopScreen(&Menu);
+                            Globals::Display->ShowHourglass();
+                            Globals::Remote.RemoveHandler();
+                            Globals::Playlist.Play();		    
+			    break;
+	            case ACT_NONE:
+                            CurrentMenu = MENU_NONE;
+                            Globals::Display->RemoveTopScreen(&Menu);
+                            Globals::Remote.RemoveHandler();
+			    break;
             }
-            Empeg->DoPlaylistContents((*IDiter).ID);
-            for(IDiter = Empeg->SongList.begin(); IDiter != Empeg->SongList.end();
-                    IDiter++) {
-                Globals::Playlist.Enqueue(Empeg, (*IDiter).ID, (*IDiter).Str);
-            }
-            CurrentMenu = MENU_NONE;
-            Globals::Display->RemoveTopScreen(&Menu);
-            Globals::Display->ShowHourglass();
-            Globals::Remote.RemoveHandler();
-            Globals::Playlist.Play();
+
             return;
             break;
     }
