@@ -119,7 +119,7 @@ void *PlaylistClass::ThreadMain(void *arg) {
                     CurrentlyPlayingEntry.Source->Stop();
                     
                     /* Show hourglass */
-                    Globals::Display.ShowHourglass();
+                    Globals::Display->ShowHourglass();
                     
                     /* Push the song that was just playing on
                        the "to be played" list */
