@@ -117,3 +117,9 @@ void InputSource::DecoderFinished(void) {
     }
     Globals::Playlist.DecoderFinished();
 }
+
+void InputSource::SetPause(int pause) {
+	if(Dec) {
+		Dec->SetPause(pause);
+	}
+}

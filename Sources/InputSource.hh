@@ -30,6 +30,7 @@ public:
     virtual Tag GetTag(int EntryNumber) = 0;
     virtual Tag SetMetadata(char *Metadata, int MetadataLength);
     void DecoderFinished(void);
+    void SetPause(int pause);
 
 protected:
     HttpConnection *OpenFile(char *Filename);
