@@ -24,7 +24,7 @@ public:
     RemoteCommandHandler(void);
     virtual ~RemoteCommandHandler(void);
     void Handle(const unsigned long &Keycode);
-
+    int GetCurrentMenu() { return CurrentMenu; };
 private:
     MenuScreen ActiveMenu;
     enum MenuTypes {

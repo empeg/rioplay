@@ -39,7 +39,7 @@ public:
     RioCommandHandler(RioServerSource *inRio);
     ~RioCommandHandler(void);
     void Handle(const unsigned long &Keycode);
-
+    int GetCurrentMenu() {return CurrentMenu; }
 private:
     MenuScreen Menu;
     enum MenuTypes {
