@@ -83,6 +83,9 @@ void *WebThread::ThreadMain(void *arg) {
         
         fprintf(fp, "<http><head><title>RioPlay Event Log</title></head><font size=+2>RioPlay Event Log</font><br><br>\n");
         
+        time_t gmttime = time(NULL);
+        fprintf(fp, "RioPlay time: %s<br><br>\n", asctime(localtime(&gmttime)));
+        
         loadavg = fopen("/proc/loadavg", "r");
         if(loadavg != NULL) {
             fgets(TempString, 1024, loadavg);
