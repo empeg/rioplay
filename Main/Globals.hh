@@ -18,6 +18,7 @@
 #include "Playlist.hh"
 #include "RioServerSource.hh"
 #include "ShoutcastSource.hh"
+#include "EmpegSource.hh"
 
 #define HWTYP_RIORCV	0
 #define HWNM_RIORCV "Rio Receiver"
@@ -28,13 +29,14 @@
 class Globals {
 public:
     static AudioOutputDevice *AudioOut;
-    static DisplayThread Display;
+    static DisplayThread *Display;
     static RemoteThread Remote;
     static WebThread Web;
-    static StatusScreen Status;
+    static StatusScreen *Status;
     static PlaylistClass Playlist;
     static RioServerSource RioServer;
     static ShoutcastSource Shoutcast;
+    static EmpegSource *Empeg;
     static int hw_type;
 };
 

@@ -27,14 +27,15 @@ MemAlloc DummyMemAlloc;
 #endif
 
 /* Be sure to have Display declared before the other thread types */
-DisplayThread Globals::Display;
+DisplayThread *Globals::Display = NULL;
 RemoteThread Globals::Remote;
 WebThread Globals::Web;
-StatusScreen Globals::Status;
+StatusScreen *Globals::Status = NULL;
 PlaylistClass Globals::Playlist;
 AudioOutputDevice *Globals::AudioOut = NULL;
 RioServerSource Globals::RioServer;
 ShoutcastSource Globals::Shoutcast;
+EmpegSource *Globals::Empeg = NULL;
 int Globals::hw_type;
 Log DummyLog;
 
@@ -73,18 +74,23 @@ int main() {
     	
     printf("Hardware Platform: %s\n\n", hwname); 
 
+    Globals::Display = new DisplayThread; 
+    Globals::Status = new StatusScreen; 
 
     /* Do hardware dependent setup here */
     if (Globals::hw_type == HWTYP_RIORCV)
 	Globals::AudioOut = new RioReceiverAudio;
     else if (Globals::hw_type == HWTYP_EMPEG)
-	Globals::AudioOut = new EmpegAudio;
+    {
+    	    Globals::AudioOut = new EmpegAudio;
+	    Globals::Empeg = new EmpegSource;
+    }
     
     /* Create Playlist thread */
     Globals::Playlist.Start();
         
     /* Create Display thread */
-    Globals::Display.Start();
+    Globals::Display->Start();
     
     /* Create Remote Control thread */
     Globals::Remote.Start();
@@ -96,6 +102,13 @@ int main() {
     pthread_join(*Globals::Remote.GetHandle(), (void **) &ReturnVal);
     
     printf("Main: Main thread exiting (exit status %d)\n", ReturnVal);
+
+    if (Globals::Empeg) delete Globals::Empeg;
+    if (Globals::AudioOut) delete Globals::AudioOut;
+    //should we delete these too for fear of memory leaks?
+    //if (Globals::Status) delete Globals::Status;
+    //if (Globals::Display) delete Globals::Display;
+    
     return ReturnVal;
 }
 
